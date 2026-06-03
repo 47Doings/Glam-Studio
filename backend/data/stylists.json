@@ -1,0 +1,98 @@
+[
+  {
+    "id": "sty-0001",
+    "name": "Ama",
+    "bio": "Professional hairstylist specializing in modern cuts and braiding",
+    "specialties": [
+      "Haircut",
+      "Braiding"
+    ],
+    "service_ids": [
+      "svc-0001",
+      "svc-0002",
+      "svc-0003"
+    ],
+    "working_hours": {
+      "monday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "tuesday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "wednesday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "thursday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "friday": {
+        "start": "09:00",
+        "end": "17:00"
+      }
+    },
+    "active": true
+  },
+  {
+    "id": "sty-0002",
+    "name": "Abena",
+    "bio": "Nail technician and skincare specialist",
+    "specialties": [
+      "Manicure",
+      "Pedicure",
+      "Facial"
+    ],
+    "service_ids": [
+      "svc-0004",
+      "svc-0005",
+      "svc-0006"
+    ],
+    "working_hours": {
+      "monday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "tuesday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "wednesday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "thursday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "friday": {
+        "start": "09:00",
+        "end": "17:00"
+      }
+    },
+    "active": true
+  },
+  {
+    "id": "sty-8377062a",
+    "name": "kojo ",
+    "bio": "grr",
+    "specialties": [
+      "Manicure"
+    ],
+    "service_ids": [
+      "svc-0004"
+    ],
+    "working_hours": {
+      "monday": null,
+      "tuesday": null,
+      "wednesday": null,
+      "thursday": null,
+      "friday": null,
+      "saturday": null,
+      "sunday": null
+    },
+    "active": true
+  }
+]

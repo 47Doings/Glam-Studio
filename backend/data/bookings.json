@@ -1,0 +1,15 @@
+[
+  {
+    "id": "bkg-e2592d5f",
+    "stylist_id": "sty-0001",
+    "service_id": "svc-0002",
+    "client_name": "jl",
+    "client_email": "test@gmail.com",
+    "client_phone": "899",
+    "appointment_time": "2026-06-03T13:00:00+00:00",
+    "notes": "htt",
+    "status": "confirmed",
+    "created_at": "2026-06-02T21:46:46.486155",
+    "updated_at": "2026-06-02T21:46:46.486155"
+  }
+]
