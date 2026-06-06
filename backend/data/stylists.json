@@ -1,53 +1,14 @@
 [
   {
     "id": "sty-0001",
-    "name": "Ama",
-    "bio": "Professional hairstylist specializing in modern cuts and braiding",
+    "name": "Abena K.",
+    "bio": "Senior stylist specializing in all hair types",
     "specialties": [
-      "Haircut",
-      "Braiding"
+      "Haircut & Style",
+      "Hair Treatment"
     ],
     "service_ids": [
       "svc-0001",
-      "svc-0002",
-      "svc-0003"
-    ],
-    "working_hours": {
-      "monday": {
-        "start": "09:00",
-        "end": "17:00"
-      },
-      "tuesday": {
-        "start": "09:00",
-        "end": "17:00"
-      },
-      "wednesday": {
-        "start": "09:00",
-        "end": "17:00"
-      },
-      "thursday": {
-        "start": "09:00",
-        "end": "17:00"
-      },
-      "friday": {
-        "start": "09:00",
-        "end": "17:00"
-      }
-    },
-    "active": true
-  },
-  {
-    "id": "sty-0002",
-    "name": "Abena",
-    "bio": "Nail technician and skincare specialist",
-    "specialties": [
-      "Manicure",
-      "Pedicure",
-      "Facial"
-    ],
-    "service_ids": [
-      "svc-0004",
-      "svc-0005",
       "svc-0006"
     ],
     "working_hours": {
@@ -75,14 +36,192 @@
     "active": true
   },
   {
-    "id": "sty-8377062a",
-    "name": "kojo ",
-    "bio": "grr",
+    "id": "sty-0002",
+    "name": "Efua O.",
+    "bio": "Braiding specialist with 8 years experience",
     "specialties": [
-      "Manicure"
+      "Full Braids",
+      "Hair Treatment"
+    ],
+    "service_ids": [
+      "svc-0002",
+      "svc-0006"
+    ],
+    "working_hours": {
+      "monday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "tuesday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "wednesday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "thursday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "friday": {
+        "start": "09:00",
+        "end": "17:00"
+      }
+    },
+    "active": true
+  },
+  {
+    "id": "sty-0003",
+    "name": "Ama M.",
+    "bio": "Professional makeup artist",
+    "specialties": [
+      "Makeup"
     ],
     "service_ids": [
       "svc-0004"
+    ],
+    "working_hours": {
+      "monday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "tuesday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "wednesday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "thursday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "friday": {
+        "start": "09:00",
+        "end": "17:00"
+      }
+    },
+    "active": true
+  },
+  {
+    "id": "sty-0004",
+    "name": "Kofi D.",
+    "bio": "Nail technician specializing in manicure and pedicure",
+    "specialties": [
+      "Manicure",
+      "Pedicure"
+    ],
+    "service_ids": [
+      "svc-0003",
+      "svc-0005"
+    ],
+    "working_hours": {
+      "monday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "tuesday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "wednesday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "thursday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "friday": {
+        "start": "09:00",
+        "end": "17:00"
+      }
+    },
+    "active": true
+  },
+  {
+    "id": "sty-0005",
+    "name": "Akua B.",
+    "bio": "Skincare and facial treatment specialist",
+    "specialties": [
+      "Makeup",
+      "Hair Treatment"
+    ],
+    "service_ids": [
+      "svc-0004",
+      "svc-0006"
+    ],
+    "working_hours": {
+      "monday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "tuesday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "wednesday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "thursday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "friday": {
+        "start": "09:00",
+        "end": "17:00"
+      }
+    },
+    "active": true
+  },
+  {
+    "id": "sty-0006",
+    "name": "Yaa S.",
+    "bio": "All-round stylist and beauty consultant",
+    "specialties": [
+      "Haircut & Style",
+      "Full Braids"
+    ],
+    "service_ids": [
+      "svc-0001",
+      "svc-0002"
+    ],
+    "working_hours": {
+      "monday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "tuesday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "wednesday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "thursday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "friday": {
+        "start": "09:00",
+        "end": "17:00"
+      }
+    },
+    "active": true
+  },
+  {
+    "id": "sty-256c5ac1",
+    "name": "Bebe P.",
+    "bio": " Hair specialist",
+    "specialties": [
+      "Haircut & Style"
+    ],
+    "service_ids": [
+      "svc-0001"
     ],
     "working_hours": {
       "monday": null,
@@ -90,6 +229,42 @@
       "wednesday": null,
       "thursday": null,
       "friday": null,
+      "saturday": null,
+      "sunday": null
+    },
+    "active": true
+  },
+  {
+    "id": "sty-e608a3d4",
+    "name": "Getty X.",
+    "bio": "",
+    "specialties": [
+      "manicure"
+    ],
+    "service_ids": [
+      "svc-0004"
+    ],
+    "working_hours": {
+      "monday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "tuesday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "wednesday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "thursday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
+      "friday": {
+        "start": "09:00",
+        "end": "17:00"
+      },
       "saturday": null,
       "sunday": null
     },

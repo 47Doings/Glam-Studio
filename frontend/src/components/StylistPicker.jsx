@@ -3,7 +3,7 @@ import { theme } from "../theme";
 import Avatar from "./Avatar";
 
 export default function StylistPicker({ stylist, selected, onSelect }) {
-  const role = stylist.specialties?.[0] || "Stylist";
+  const role = stylist.specialties?.join(" · ") || "Stylist";
   return (
     <div
       onClick={() => onSelect(stylist)}

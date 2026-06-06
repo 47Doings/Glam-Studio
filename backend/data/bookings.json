@@ -11,5 +11,31 @@
     "status": "confirmed",
     "created_at": "2026-06-02T21:46:46.486155",
     "updated_at": "2026-06-02T21:46:46.486155"
+  },
+  {
+    "id": "bkg-1d3be5e0",
+    "stylist_id": "sty-0004",
+    "service_id": "svc-0005",
+    "client_name": "kofi ",
+    "client_email": "kofi@example.com",
+    "client_phone": "2335000000000",
+    "appointment_time": "2026-06-12T10:30:00+00:00",
+    "notes": "grrrrr",
+    "status": "confirmed",
+    "created_at": "2026-06-06T11:29:53.350443",
+    "updated_at": "2026-06-06T11:29:53.350443"
+  },
+  {
+    "id": "bkg-a8c80b06",
+    "stylist_id": "sty-0006",
+    "service_id": "svc-0001",
+    "client_name": "koko",
+    "client_email": null,
+    "client_phone": "233565654312",
+    "appointment_time": "2026-06-09T09:00:00+00:00",
+    "notes": "",
+    "status": "confirmed",
+    "created_at": "2026-06-06T12:29:16.747920",
+    "updated_at": "2026-06-06T12:29:16.747920"
   }
 ]

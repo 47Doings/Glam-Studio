@@ -342,9 +342,20 @@ function ActionBtn({ color, onClick, children }) {
 }
 
 // ── STYLISTS ─────────────────────────────────────────────────────────────────
+const DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+
 function StylistsTab({ stylists, onChange }) {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: "", bio: "", specialties: "", service_ids: "" });
+  const [hours, setHours] = useState({
+    monday: { enabled: true, start: "09:00", end: "17:00" },
+    tuesday: { enabled: true, start: "09:00", end: "17:00" },
+    wednesday: { enabled: true, start: "09:00", end: "17:00" },
+    thursday: { enabled: true, start: "09:00", end: "17:00" },
+    friday: { enabled: true, start: "09:00", end: "17:00" },
+    saturday: { enabled: false, start: "09:00", end: "17:00" },
+    sunday: { enabled: false, start: "09:00", end: "17:00" },
+  });
 
   const inputStyle = {
     background: theme.cardAlt,
@@ -358,7 +369,25 @@ function StylistsTab({ stylists, onChange }) {
     width: "100%",
   };
 
+  const timeInput = {
+    background: theme.cardAlt,
+    border: `1.5px solid ${theme.border}`,
+    borderRadius: 6,
+    padding: "6px 8px",
+    color: theme.text,
+    fontFamily: theme.font,
+    fontSize: 12,
+    outline: "none",
+    width: 80,
+  };
+
   const save = async () => {
+    const working_hours = {};
+    for (const day of DAYS) {
+      working_hours[day] = hours[day].enabled
+        ? { start: hours[day].start, end: hours[day].end }
+        : null;
+    }
     await apiFetch(API("/stylists/"), {
       method: "POST",
       body: JSON.stringify({
@@ -366,6 +395,7 @@ function StylistsTab({ stylists, onChange }) {
         bio: form.bio,
         specialties: form.specialties.split(",").map((s) => s.trim()).filter(Boolean),
         service_ids: form.service_ids.split(",").map((s) => s.trim()).filter(Boolean),
+        working_hours,
       }),
     });
     setForm({ name: "", bio: "", specialties: "", service_ids: "" });
@@ -398,7 +428,38 @@ function StylistsTab({ stylists, onChange }) {
           <input style={inputStyle} placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           <input style={inputStyle} placeholder="Bio" value={form.bio} onChange={(e) => setForm({ ...form, bio: e.target.value })} />
           <input style={inputStyle} placeholder="Specialties (comma separated)" value={form.specialties} onChange={(e) => setForm({ ...form, specialties: e.target.value })} />
-          <input style={inputStyle} placeholder="Service IDs (comma separated)" value={form.service_ids} onChange={(e) => setForm({ ...form, service_ids: e.target.value })} />
+          <input style={inputStyle} placeholder="Service IDs e.g. svc-0001, svc-0002" value={form.service_ids} onChange={(e) => setForm({ ...form, service_ids: e.target.value })} />
+
+          <div style={{ fontSize: 11, color: theme.textFaint, letterSpacing: "1px", textTransform: "uppercase", marginTop: 8 }}>Working Hours</div>
+          {DAYS.map((day) => (
+            <div key={day} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                type="checkbox"
+                checked={hours[day].enabled}
+                onChange={(e) => setHours({ ...hours, [day]: { ...hours[day], enabled: e.target.checked } })}
+              />
+              <span style={{ fontSize: 12, color: theme.text, width: 90, textTransform: "capitalize" }}>{day}</span>
+              {hours[day].enabled && (
+                <>
+                  <input
+                    type="time"
+                    style={timeInput}
+                    value={hours[day].start}
+                    onChange={(e) => setHours({ ...hours, [day]: { ...hours[day], start: e.target.value } })}
+                  />
+                  <span style={{ fontSize: 12, color: theme.textFaint }}>to</span>
+                  <input
+                    type="time"
+                    style={timeInput}
+                    value={hours[day].end}
+                    onChange={(e) => setHours({ ...hours, [day]: { ...hours[day], end: e.target.value } })}
+                  />
+                </>
+              )}
+              {!hours[day].enabled && <span style={{ fontSize: 12, color: theme.textFaint }}>Day off</span>}
+            </div>
+          ))}
+
           <button
             onClick={save}
             style={{
@@ -411,9 +472,10 @@ function StylistsTab({ stylists, onChange }) {
               fontWeight: 600,
               cursor: "pointer",
               fontFamily: theme.font,
+              marginTop: 8,
             }}
           >
-            Save
+            Save Stylist
           </button>
         </div>
       )}

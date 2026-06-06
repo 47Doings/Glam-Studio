@@ -1,15 +1,15 @@
 [
   {
     "id": "svc-0001",
-    "name": "Haircut & Styling",
+    "name": "Haircut & Style",
     "description": "Professional cut and style tailored to your look",
-    "duration_minutes": 60,
+    "duration_minutes": 45,
     "price": 120.0,
     "category": "hair"
   },
   {
     "id": "svc-0002",
-    "name": "Hair Braiding",
+    "name": "Full Braids",
     "description": "Traditional and modern braiding styles",
     "duration_minutes": 120,
     "price": 200.0,
@@ -17,34 +17,34 @@
   },
   {
     "id": "svc-0003",
-    "name": "Hair Coloring",
-    "description": "Full color, highlights, or balayage",
-    "duration_minutes": 90,
-    "price": 250.0,
-    "category": "color"
+    "name": "Manicure",
+    "description": "Classic manicure with nail shaping and polish",
+    "duration_minutes": 30,
+    "price": 80.0,
+    "category": "nails"
   },
   {
     "id": "svc-0004",
-    "name": "Manicure",
-    "description": "Classic manicure with nail shaping and polish",
-    "duration_minutes": 45,
-    "price": 80.0,
-    "category": "nails"
+    "name": "Makeup",
+    "description": "Professional makeup application for any occasion",
+    "duration_minutes": 60,
+    "price": 150.0,
+    "category": "other"
   },
   {
     "id": "svc-0005",
     "name": "Pedicure",
     "description": "Relaxing pedicure with scrub and polish",
-    "duration_minutes": 60,
-    "price": 100.0,
+    "duration_minutes": 40,
+    "price": 90.0,
     "category": "nails"
   },
   {
     "id": "svc-0006",
-    "name": "Facial Treatment",
-    "description": "Deep cleansing and moisturizing facial",
-    "duration_minutes": 75,
+    "name": "Hair Treatment",
+    "description": "Deep conditioning and restorative hair treatment",
+    "duration_minutes": 90,
     "price": 180.0,
-    "category": "treatment"
+    "category": "hair"
   }
 ]

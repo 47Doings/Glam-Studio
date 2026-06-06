@@ -1,12 +1,20 @@
 import React from "react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Booking from "./pages/booking.jsx";
 import Admin from "./pages/admin.jsx";
 import Settings from "./pages/settings.jsx";
-import { theme } from "./theme";
+import { theme, applyTheme } from "./theme";
 
 export default function App() {
   const [page, setPage] = useState("booking");
+  const [themeMode, setThemeMode] = useState(
+    () => localStorage.getItem("theme") || "dark"
+  );
+
+  useEffect(() => {
+    applyTheme(themeMode);
+    localStorage.setItem("theme", themeMode);
+  }, [themeMode]);
 
   const navStyle = {
     display: "flex",
@@ -24,7 +32,7 @@ export default function App() {
     border: `1.5px solid ${active ? theme.accent : "transparent"}`,
     borderRadius: 8,
     padding: "7px 14px",
-    color: active ? "#fff" : "#888",
+    color: active ? theme.text : "#888",
     cursor: "pointer",
     fontFamily: theme.font,
     fontSize: 13,
@@ -33,7 +41,6 @@ export default function App() {
 
   return (
     <div style={{ background: theme.bg, minHeight: "100vh" }}>
-      {/* NAV */}
       <div style={navStyle}>
         <button style={btn(page === "booking")} onClick={() => setPage("booking")}>
           Booking
@@ -46,10 +53,9 @@ export default function App() {
         </button>
       </div>
 
-      {/* PAGES */}
       {page === "booking" && <Booking />}
       {page === "admin" && <Admin />}
-      {page === "settings" && <Settings />}
+      {page === "settings" && <Settings onThemeChange={setThemeMode} />}
     </div>
   );
 }

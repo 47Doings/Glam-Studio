@@ -69,6 +69,7 @@ export default function Booking() {
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [attempted, setAttempted] = useState(false);
 
   const dates = useMemo(() => buildDates(14), []);
 
@@ -83,14 +84,18 @@ export default function Booking() {
       .catch(console.error);
   }, []);
 
-  // Stylists that can perform the selected service (all stylists before a service is picked).
-  const visibleStylists = useMemo(() => {
+const visibleStylists = useMemo(() => {
     const active = stylists.filter((s) => s.active !== false);
     if (!selectedService) return active;
-    return active.filter((s) => s.service_ids?.includes(selectedService.id));
+    return active.filter(
+      (s) =>
+        s.service_ids?.includes(selectedService.id) ||
+        s.specialties?.some(
+          (sp) => sp.toLowerCase() === selectedService.name.toLowerCase()
+        )
+    );
   }, [stylists, selectedService]);
 
-  // Drop a selected stylist that no longer offers the chosen service.
   useEffect(() => {
     if (
       selectedStylist &&
@@ -127,7 +132,7 @@ export default function Booking() {
     selectedDate &&
     selectedTime &&
     form.name.trim() &&
-    form.email.trim();
+    (form.email.trim() || form.phone.trim());
 
   async function submitBooking() {
     if (!ready || loading) return;
@@ -142,8 +147,8 @@ export default function Booking() {
           stylist_id: selectedStylist.id,
           service_id: selectedService.id,
           client_name: form.name,
-          client_email: form.email,
-          client_phone: form.phone,
+          client_email: form.email.trim() || null,
+          client_phone: form.phone.trim() || null,
           notes: form.notes,
           appointment_time: `${selectedDate}T${selectedTime}:00`,
         }),
@@ -174,6 +179,7 @@ export default function Booking() {
     setForm({ name: "", email: "", phone: "", notes: "" });
     setBooking(null);
     setError("");
+    setAttempted(false);
   }
 
   if (booking) {
@@ -337,6 +343,9 @@ export default function Booking() {
       {/* DETAILS */}
       <div style={{ padding: "16px 12px 0" }}>
         <div style={sectionTitle}>Your Details</div>
+        <p style={{ fontSize: 12, color: theme.textFaint, marginBottom: 8 }}>
+          Name is required · Email or phone required
+        </p>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <input style={inputStyle} placeholder="Full name" value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })} />
@@ -358,14 +367,24 @@ export default function Booking() {
         />
       </div>
 
+      <div style={{ margin: "0 12px 8px" }}>
+        {attempted && !ready && <>
+          {!selectedService && <p style={{ fontSize: 13, color: "#e84a4a", marginBottom: 6, fontWeight: 600 }}>· Select a service</p>}
+          {!selectedStylist && <p style={{ fontSize: 13, color: "#e84a4a", marginBottom: 6, fontWeight: 600 }}>· Pick a stylist</p>}
+          {!selectedDate && <p style={{ fontSize: 13, color: "#e84a4a", marginBottom: 6, fontWeight: 600 }}>· Select a date</p>}
+          {!selectedTime && <p style={{ fontSize: 13, color: "#e84a4a", marginBottom: 6, fontWeight: 600 }}>· Choose a time</p>}
+          {!form.name.trim() && <p style={{ fontSize: 13, color: "#e84a4a", marginBottom: 6, fontWeight: 600 }}>· Enter your name</p>}
+          {(!form.email.trim() && !form.phone.trim()) && <p style={{ fontSize: 13, color: "#e84a4a", marginBottom: 6, fontWeight: 600 }}>· Enter email or phone</p>}
+        </>}
+      </div>
+
       {error && (
         <div style={{ margin: "0 12px 8px", color: theme.danger, fontSize: 13 }}>{error}</div>
       )}
 
       {/* CONFIRM */}
       <button
-        onClick={submitBooking}
-        disabled={!ready || loading}
+        onClick={() => { setAttempted(true); submitBooking(); }}
         style={{
           display: "flex",
           alignItems: "center",

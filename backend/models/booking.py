@@ -15,7 +15,7 @@ class BookingBase(BaseModel):
     stylist_id: str
     service_id: str
     client_name: str = Field(..., min_length=1, max_length=100)
-    client_email: str = Field(..., pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    client_email: Optional[str] = Field(None, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     client_phone: Optional[str] = Field(None, max_length=20)
     appointment_time: datetime
     notes: Optional[str] = Field(None, max_length=500)
