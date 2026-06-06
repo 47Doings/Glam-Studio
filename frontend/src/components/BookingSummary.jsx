@@ -1,51 +1,64 @@
 import React from "react";
+import { theme, formatGHS, formatDuration } from "../theme";
 
-export default function BookingSummary({ service, stylist, date, time, form }) {
+const Dash = () => <span style={{ color: "#555" }}>—</span>;
+
+function Row({ label, children }) {
   return (
-    <div style={{ background: "#111", padding: 20, borderRadius: 12 }}>
-      <h3 style={{ color: "#d4b896", marginBottom: 16 }}>Booking Summary</h3>
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 10,
+        fontSize: 14,
+      }}
+    >
+      <span style={{ color: theme.textMuted }}>{label}</span>
+      <span style={{ color: theme.text, fontWeight: 500 }}>{children}</span>
+    </div>
+  );
+}
 
-      <p style={{ color: "#aaa", margin: "6px 0" }}>
-        <span style={{ color: "#666" }}>Service: </span>
-        {service?.name}
-      </p>
+export default function BookingSummary({ service, stylist, dateTimeLabel }) {
+  return (
+    <div style={{ background: "#1a1a1a", borderRadius: theme.radiusLg, padding: 20 }}>
+      <div
+        style={{
+          fontSize: 11,
+          letterSpacing: "1.5px",
+          color: theme.textFaint,
+          textTransform: "uppercase",
+          marginBottom: 14,
+        }}
+      >
+        Booking Summary
+      </div>
 
-      <p style={{ color: "#aaa", margin: "6px 0" }}>
-        <span style={{ color: "#666" }}>Stylist: </span>
-        {stylist?.name}
-      </p>
+      <Row label="Service">{service ? service.name : <Dash />}</Row>
+      <Row label="Stylist">{stylist ? stylist.name : <Dash />}</Row>
+      <Row label="Date & time">{dateTimeLabel || <Dash />}</Row>
+      <Row label="Duration">
+        {service ? formatDuration(service.duration_minutes) : <Dash />}
+      </Row>
 
-      <p style={{ color: "#aaa", margin: "6px 0" }}>
-        <span style={{ color: "#666" }}>Date: </span>
-        {date}
-      </p>
-
-      <p style={{ color: "#aaa", margin: "6px 0" }}>
-        <span style={{ color: "#666" }}>Time: </span>
-        {time}
-      </p>
-
-      <p style={{ color: "#aaa", margin: "6px 0" }}>
-        <span style={{ color: "#666" }}>Name: </span>
-        {form?.name}
-      </p>
-
-      <p style={{ color: "#aaa", margin: "6px 0" }}>
-        <span style={{ color: "#666" }}>Email: </span>
-        {form?.email}
-      </p>
-
-      <p style={{ color: "#aaa", margin: "6px 0" }}>
-        <span style={{ color: "#666" }}>Phone: </span>
-        {form?.phone}
-      </p>
-
-      {form?.notes && (
-        <p style={{ color: "#aaa", margin: "6px 0" }}>
-          <span style={{ color: "#666" }}>Notes: </span>
-          {form.notes}
-        </p>
-      )}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          paddingTop: 12,
+          marginTop: 4,
+          borderTop: `1px solid ${theme.border}`,
+          fontSize: 16,
+          fontWeight: 700,
+          color: theme.text,
+        }}
+      >
+        <span>Total</span>
+        <span style={{ color: theme.accent, fontSize: 18 }}>
+          {formatGHS(service ? service.price : 0)}
+        </span>
+      </div>
     </div>
   );
 }

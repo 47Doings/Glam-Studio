@@ -1,23 +1,21 @@
 import React from "react";
+import { theme } from "../theme";
+import Avatar from "./Avatar";
+
 export default function StylistPicker({ stylist, selected, onSelect }) {
+  const role = stylist.specialties?.[0] || "Stylist";
   return (
-    <button
+    <div
       onClick={() => onSelect(stylist)}
-      style={{
-        background: selected ? "#1e1a15" : "#111",
-        border: selected ? "1px solid #d4b896" : "1px solid #222",
-        padding: 16,
-        borderRadius: 12,
-        width: "100%",
-        textAlign: "left",
-      }}
+      style={{ textAlign: "center", cursor: "pointer", flexShrink: 0, width: 64 }}
     >
-      <p style={{ margin: 0, color: selected ? "#d4b896" : "#fff" }}>
+      <div style={{ display: "flex", justifyContent: "center", marginBottom: 6 }}>
+        <Avatar name={stylist.name} size={52} selected={selected} accent={theme.accent} />
+      </div>
+      <div style={{ fontSize: 12, color: "#ccc", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
         {stylist.name}
-      </p>
-      <p style={{ margin: "4px 0 0", color: "#666", fontSize: 13 }}>
-        {stylist.bio}
-      </p>
-    </button>
+      </div>
+      <div style={{ fontSize: 11, color: theme.textFaint }}>{role}</div>
+    </div>
   );
 }

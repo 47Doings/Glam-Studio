@@ -20,6 +20,10 @@ class BookingBase(BaseModel):
     appointment_time: datetime
     notes: Optional[str] = Field(None, max_length=500)
 
+
+class BookingCreate(BookingBase):
+    # The "must be in the future" rule only applies when creating a booking,
+    # not when reading stored bookings back (which may now be in the past).
     @field_validator("appointment_time")
     @classmethod
     def appointment_must_be_future(cls, v: datetime) -> datetime:
@@ -27,10 +31,6 @@ class BookingBase(BaseModel):
         if v_aware < datetime.now(timezone.utc):
             raise ValueError("appointment_time must be in the future")
         return v_aware
-
-
-class BookingCreate(BookingBase):
-    pass
 
 
 class BookingUpdate(BaseModel):
