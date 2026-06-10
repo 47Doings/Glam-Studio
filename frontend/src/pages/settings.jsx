@@ -1,27 +1,34 @@
 import React from "react";
 import { useEffect, useState } from "react";
-import { applyTheme } from "../theme";
 
 const DEFAULT_API = "http://localhost:8000";
 
-export default function Settings({ onThemeChange }) {
+export default function Settings() {
   const [apiUrl, setApiUrl] = useState(
     () => localStorage.getItem("apiUrl") || DEFAULT_API
   );
 
-  const [themeMode, setThemeMode] = useState(
+  const [theme, setTheme] = useState(
     () => localStorage.getItem("theme") || "dark"
   );
 
+  // ── SAVE API URL GLOBALLY ─────────────────────────────
   useEffect(() => {
     localStorage.setItem("apiUrl", apiUrl);
   }, [apiUrl]);
 
+  // ── APPLY THEME GLOBALLY ──────────────────────────────
   useEffect(() => {
-    localStorage.setItem("theme", themeMode);
-    applyTheme(themeMode);
-    onThemeChange?.(themeMode);
-  }, [themeMode]);
+    localStorage.setItem("theme", theme);
+
+    if (theme === "dark") {
+      document.body.style.background = "#0d0d0d";
+      document.body.style.color = "#e0e0e0";
+    } else {
+      document.body.style.background = "#f5f5f5";
+      document.body.style.color = "#111";
+    }
+  }, [theme]);
 
   const box = {
     background: "#111",
@@ -45,11 +52,9 @@ export default function Settings({ onThemeChange }) {
 
   const resetSettings = () => {
     setApiUrl(DEFAULT_API);
-    setThemeMode("dark");
+    setTheme("dark");
     localStorage.removeItem("apiUrl");
     localStorage.removeItem("theme");
-    applyTheme("dark");
-    onThemeChange?.("dark");
   };
 
   return (
@@ -58,6 +63,7 @@ export default function Settings({ onThemeChange }) {
         Settings
       </h2>
 
+      {/* API URL CONTROL */}
       <div style={box}>
         <label style={{ fontSize: 12, color: "#666" }}>API URL</label>
         <input
@@ -70,21 +76,24 @@ export default function Settings({ onThemeChange }) {
         </p>
       </div>
 
+      {/* THEME CONTROL */}
       <div style={box}>
         <label style={{ fontSize: 12, color: "#666" }}>Theme</label>
         <select
-          value={themeMode}
-          onChange={(e) => setThemeMode(e.target.value)}
+          value={theme}
+          onChange={(e) => setTheme(e.target.value)}
           style={input}
         >
           <option value="dark">Dark</option>
           <option value="light">Light</option>
         </select>
+
         <p style={{ fontSize: 11, color: "#555", marginTop: 8 }}>
           Controls global UI appearance
         </p>
       </div>
 
+      {/* RESET */}
       <div style={box}>
         <button
           onClick={resetSettings}
