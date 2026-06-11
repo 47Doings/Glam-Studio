@@ -1,72 +1,72 @@
 from fastapi import APIRouter, HTTPException, Query
 from typing import List, Optional
-import uuid
+from decimal import Decimal
 
-from models.service import Service, ServiceCreate, ServiceUpdate, ServiceCategory
-from storage import load_data, save_data
+from database import get_connection
 
 router = APIRouter(prefix="/services", tags=["Services"])
 
-DATA_FILE = "services"
 
-
-@router.get("/", response_model=List[Service])
+@router.get("/")
 def list_services(
-    category: Optional[ServiceCategory] = Query(None, description="Filter by category"),
     min_price: Optional[float] = Query(None, ge=0),
     max_price: Optional[float] = Query(None, ge=0),
 ):
-    """List all services, with optional filters."""
-    services = load_data(DATA_FILE)
+    conn = get_connection()
+    cursor = conn.cursor()
 
-    if category:
-        services = [s for s in services if s.get("category") == category.value]
+    query = "SELECT * FROM services WHERE 1=1"
+    params = []
+
     if min_price is not None:
-        services = [s for s in services if s.get("price", 0) >= min_price]
+        query += " AND price >= %s"
+        params.append(min_price)
     if max_price is not None:
-        services = [s for s in services if s.get("price", 0) <= max_price]
+        query += " AND price <= %s"
+        params.append(max_price)
 
-    return services
+    cursor.execute(query, params)
+    services = cursor.fetchall()
+    conn.close()
 
-
-@router.get("/{service_id}", response_model=Service)
-def get_service(service_id: str):
-    """Get a single service by ID."""
-    services = load_data(DATA_FILE)
-    for service in services:
-        if service["id"] == service_id:
-            return service
-    raise HTTPException(status_code=404, detail=f"Service '{service_id}' not found")
+    return [dict(s) for s in services]
 
 
-@router.post("/", response_model=Service, status_code=201)
-def create_service(payload: ServiceCreate):
-    """Create a new service."""
-    services = load_data(DATA_FILE)
-    new_service = {"id": f"svc-{uuid.uuid4().hex[:8]}", **payload.model_dump()}
-    services.append(new_service)
-    save_data(DATA_FILE, services)
-    return new_service
+@router.get("/{service_id}")
+def get_service(service_id: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM services WHERE id = %s", (service_id,))
+    service = cursor.fetchone()
+    conn.close()
+
+    if not service:
+        raise HTTPException(status_code=404, detail="Service not found")
+    return dict(service)
 
 
-@router.patch("/{service_id}", response_model=Service)
-def update_service(service_id: str, payload: ServiceUpdate):
-    """Partially update a service."""
-    services = load_data(DATA_FILE)
-    for i, service in enumerate(services):
-        if service["id"] == service_id:
-            updates = payload.model_dump(exclude_none=True)
-            services[i] = {**service, **updates}
-            save_data(DATA_FILE, services)
-            return services[i]
-    raise HTTPException(status_code=404, detail=f"Service '{service_id}' not found")
+@router.post("/", status_code=201)
+def create_service(name: str, price: float, duration_minutes: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO services (name, price, duration_minutes) VALUES (%s, %s, %s) RETURNING *",
+        (name, price, duration_minutes)
+    )
+    new_service = cursor.fetchone()
+    conn.commit()
+    conn.close()
+    return dict(new_service)
 
 
 @router.delete("/{service_id}", status_code=204)
-def delete_service(service_id: str):
-    """Delete a service."""
-    services = load_data(DATA_FILE)
-    filtered = [s for s in services if s["id"] != service_id]
-    if len(filtered) == len(services):
-        raise HTTPException(status_code=404, detail=f"Service '{service_id}' not found")
-    save_data(DATA_FILE, filtered)
+def delete_service(service_id: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM services WHERE id = %s RETURNING id", (service_id,))
+    deleted = cursor.fetchone()
+    conn.commit()
+    conn.close()
+
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Service not found")

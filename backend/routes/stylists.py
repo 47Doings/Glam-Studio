@@ -1,99 +1,108 @@
 from fastapi import APIRouter, HTTPException, Query
-from typing import List, Optional
-import uuid
+from typing import Optional
+from datetime import datetime, timedelta
 
-from models.stylist import Stylist, StylistCreate, StylistUpdate
-from storage import load_data, save_data
+from database import get_connection
 
 router = APIRouter(prefix="/stylists", tags=["Stylists"])
 
-DATA_FILE = "stylists"
 DAYS_OF_WEEK = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 
 
-@router.get("/", response_model=List[Stylist])
+@router.get("/")
 def list_stylists(
-    active_only: bool = Query(True, description="Return only active stylists"),
-    service_id: Optional[str] = Query(None, description="Filter by offered service"),
+    active_only: bool = Query(True),
+    service_id: Optional[int] = Query(None),
 ):
-    """List all stylists with optional filters."""
-    stylists = load_data(DATA_FILE)
+    conn = get_connection()
+    cursor = conn.cursor()
 
-    if active_only:
-        stylists = [s for s in stylists if s.get("active", True)]
     if service_id:
-        stylists = [s for s in stylists if service_id in s.get("service_ids", [])]
+        cursor.execute("""
+            SELECT stylists.* FROM stylists
+            JOIN stylist_services ON stylists.id = stylist_services.stylist_id
+            WHERE stylist_services.service_id = %s
+            AND (%s = FALSE OR stylists.status = 'active')
+        """, (service_id, active_only))
+    else:
+        if active_only:
+            cursor.execute("SELECT * FROM stylists WHERE status = 'active'")
+        else:
+            cursor.execute("SELECT * FROM stylists")
 
-    return stylists
+    stylists = cursor.fetchall()
+    conn.close()
+    return [dict(s) for s in stylists]
 
 
-@router.get("/{stylist_id}", response_model=Stylist)
-def get_stylist(stylist_id: str):
-    """Get a single stylist by ID."""
-    stylists = load_data(DATA_FILE)
-    for stylist in stylists:
-        if stylist["id"] == stylist_id:
-            return stylist
-    raise HTTPException(status_code=404, detail=f"Stylist '{stylist_id}' not found")
+@router.get("/{stylist_id}")
+def get_stylist(stylist_id: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM stylists WHERE id = %s", (stylist_id,))
+    stylist = cursor.fetchone()
+    conn.close()
+
+    if not stylist:
+        raise HTTPException(status_code=404, detail="Stylist not found")
+    return dict(stylist)
 
 
 @router.get("/{stylist_id}/availability")
 def get_stylist_availability(
-    stylist_id: str,
-    date: str = Query(..., description="Date in YYYY-MM-DD format", pattern=r"^\d{4}-\d{2}-\d{2}$"),
-    service_id: Optional[str] = Query(None, description="Include service duration in slot calculation"),
+    stylist_id: int,
+    date: str = Query(..., pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    service_id: Optional[int] = Query(None),
 ):
-    """
-    Return available time slots for a stylist on a given date.
-    Slots are 30-minute intervals within working hours, minus confirmed bookings.
-    """
-    from datetime import datetime, timedelta
+    conn = get_connection()
+    cursor = conn.cursor()
 
-    stylists = load_data(DATA_FILE)
-    stylist = next((s for s in stylists if s["id"] == stylist_id), None)
+    cursor.execute("SELECT * FROM stylists WHERE id = %s", (stylist_id,))
+    stylist = cursor.fetchone()
     if not stylist:
-        raise HTTPException(status_code=404, detail=f"Stylist '{stylist_id}' not found")
-    if not stylist.get("active", True):
-        raise HTTPException(status_code=400, detail="Stylist is not currently active")
+        raise HTTPException(status_code=404, detail="Stylist not found")
+    if stylist["status"] != "active":
+        raise HTTPException(status_code=400, detail="Stylist is not active")
 
-    try:
-        target_date = datetime.strptime(date, "%Y-%m-%d").date()
-    except ValueError:
-        raise HTTPException(status_code=422, detail="Invalid date format. Use YYYY-MM-DD")
-
+    target_date = datetime.strptime(date, "%Y-%m-%d").date()
     day_name = DAYS_OF_WEEK[target_date.weekday()]
-    hours = stylist.get("working_hours", {}).get(day_name)
-    if not hours:
+
+    if day_name not in stylist["working_days"]:
+        conn.close()
         return {"date": date, "stylist_id": stylist_id, "available_slots": [], "reason": "Day off"}
 
-    # Determine service duration for slot blocking
-    slot_duration = 30  # default granularity
+    slot_duration = 30
     if service_id:
-        services = load_data("services")
-        svc = next((s for s in services if s["id"] == service_id), None)
-        if svc:
-            slot_duration = svc["duration_minutes"]
+        cursor.execute("SELECT duration_minutes FROM services WHERE id = %s", (service_id,))
+        service = cursor.fetchone()
+        if service:
+            slot_duration = service["duration_minutes"]
 
-    # Build all slots
-    start_dt = datetime.strptime(f"{date} {hours['start']}", "%Y-%m-%d %H:%M")
-    end_dt = datetime.strptime(f"{date} {hours['end']}", "%Y-%m-%d %H:%M")
+    start_dt = datetime.strptime(f"{date} {stylist['working_hours_start']}", "%Y-%m-%d %H:%M:%S")
+    end_dt = datetime.strptime(f"{date} {stylist['working_hours_end']}", "%Y-%m-%d %H:%M:%S")
+
     all_slots = []
-    cursor = start_dt
-    while cursor + timedelta(minutes=slot_duration) <= end_dt:
-        all_slots.append(cursor)
-        cursor += timedelta(minutes=30)
+    current = start_dt
+    while current + timedelta(minutes=slot_duration) <= end_dt:
+        all_slots.append(current)
+        current += timedelta(minutes=30)
 
-    # Remove booked slots
-    bookings = load_data("bookings")
+    cursor.execute("""
+        SELECT bookings.booking_time, services.duration_minutes
+        FROM bookings
+        JOIN services ON bookings.service_id = services.id
+        WHERE bookings.stylist_id = %s
+        AND bookings.booking_date = %s
+        AND bookings.status != 'cancelled'
+    """, (stylist_id, target_date))
+
     booked_ranges = []
-    for b in bookings:
-        if b.get("stylist_id") == stylist_id and b.get("status") not in ("cancelled",):
-            apt = datetime.fromisoformat(b["appointment_time"])
-            if apt.date() == target_date:
-                svc_list = load_data("services")
-                svc = next((s for s in svc_list if s["id"] == b.get("service_id")), None)
-                dur = svc["duration_minutes"] if svc else 60
-                booked_ranges.append((apt, apt + timedelta(minutes=dur)))
+    for row in cursor.fetchall():
+        booked_start = datetime.strptime(f"{date} {row['booking_time']}", "%Y-%m-%d %H:%M:%S")
+        booked_end = booked_start + timedelta(minutes=row["duration_minutes"])
+        booked_ranges.append((booked_start, booked_end))
+
+    conn.close()
 
     available = []
     for slot in all_slots:
@@ -108,34 +117,51 @@ def get_stylist_availability(
     return {"date": date, "stylist_id": stylist_id, "available_slots": available}
 
 
-@router.post("/", response_model=Stylist, status_code=201)
-def create_stylist(payload: StylistCreate):
-    """Create a new stylist."""
-    stylists = load_data(DATA_FILE)
-    new_stylist = {"id": f"sty-{uuid.uuid4().hex[:8]}", **payload.model_dump()}
-    stylists.append(new_stylist)
-    save_data(DATA_FILE, stylists)
-    return new_stylist
+@router.post("/", status_code=201)
+def create_stylist(
+    name: str,
+    specialty: str,
+    working_hours_start: str,
+    working_hours_end: str,
+    working_days: list[str],
+):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO stylists (name, specialty, working_hours_start, working_hours_end, working_days)
+        VALUES (%s, %s, %s, %s, %s) RETURNING *
+    """, (name, specialty, working_hours_start, working_hours_end, working_days))
+    new_stylist = cursor.fetchone()
+    conn.commit()
+    conn.close()
+    return dict(new_stylist)
 
 
-@router.patch("/{stylist_id}", response_model=Stylist)
-def update_stylist(stylist_id: str, payload: StylistUpdate):
-    """Partially update a stylist."""
-    stylists = load_data(DATA_FILE)
-    for i, stylist in enumerate(stylists):
-        if stylist["id"] == stylist_id:
-            updates = payload.model_dump(exclude_none=True)
-            stylists[i] = {**stylist, **updates}
-            save_data(DATA_FILE, stylists)
-            return stylists[i]
-    raise HTTPException(status_code=404, detail=f"Stylist '{stylist_id}' not found")
+@router.patch("/{stylist_id}")
+def update_stylist(stylist_id: int, status: str):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE stylists SET status = %s WHERE id = %s RETURNING *",
+        (status, stylist_id)
+    )
+    updated = cursor.fetchone()
+    conn.commit()
+    conn.close()
+
+    if not updated:
+        raise HTTPException(status_code=404, detail="Stylist not found")
+    return dict(updated)
 
 
 @router.delete("/{stylist_id}", status_code=204)
-def delete_stylist(stylist_id: str):
-    """Delete a stylist (hard delete)."""
-    stylists = load_data(DATA_FILE)
-    filtered = [s for s in stylists if s["id"] != stylist_id]
-    if len(filtered) == len(stylists):
-        raise HTTPException(status_code=404, detail=f"Stylist '{stylist_id}' not found")
-    save_data(DATA_FILE, filtered)
+def delete_stylist(stylist_id: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM stylists WHERE id = %s RETURNING id", (stylist_id,))
+    deleted = cursor.fetchone()
+    conn.commit()
+    conn.close()
+
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Stylist not found")

@@ -1,180 +1,206 @@
 from fastapi import APIRouter, HTTPException, Query
-from typing import List, Optional
-from datetime import datetime
-import uuid
+from typing import Optional
+from datetime import datetime, timedelta
 
-from models.booking import Booking, BookingCreate, BookingUpdate, BookingStatus
-from storage import load_data, save_data
+from database import get_connection
 
 router = APIRouter(prefix="/bookings", tags=["Bookings"])
 
-DATA_FILE = "bookings"
 
-
-def _validate_booking_refs(stylist_id: str, service_id: str):
-    """Validate that stylist exists, is active, and offers the service."""
-    stylists = load_data("stylists")
-    stylist = next((s for s in stylists if s["id"] == stylist_id), None)
+def _validate_booking_refs(cursor, stylist_id: int, service_id: int):
+    cursor.execute("SELECT * FROM stylists WHERE id = %s", (stylist_id,))
+    stylist = cursor.fetchone()
     if not stylist:
-        raise HTTPException(status_code=404, detail=f"Stylist '{stylist_id}' not found")
-    if not stylist.get("active", True):
-        raise HTTPException(status_code=400, detail="Stylist is not currently active")
-    if service_id not in stylist.get("service_ids", []):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Stylist '{stylist_id}' does not offer service '{service_id}'"
-        )
+        raise HTTPException(status_code=404, detail="Stylist not found")
+    if stylist["status"] != "active":
+        raise HTTPException(status_code=400, detail="Stylist is not active")
 
-    services = load_data("services")
-    service = next((s for s in services if s["id"] == service_id), None)
+    cursor.execute("""
+        SELECT * FROM stylist_services
+        WHERE stylist_id = %s AND service_id = %s
+    """, (stylist_id, service_id))
+    if not cursor.fetchone():
+        raise HTTPException(status_code=400, detail="Stylist does not offer this service")
+
+    cursor.execute("SELECT * FROM services WHERE id = %s", (service_id,))
+    service = cursor.fetchone()
     if not service:
-        raise HTTPException(status_code=404, detail=f"Service '{service_id}' not found")
+        raise HTTPException(status_code=404, detail="Service not found")
 
     return stylist, service
 
 
-def _check_conflict(stylist_id: str, appointment_time: datetime, duration_minutes: int, exclude_id: Optional[str] = None):
-    """Raise 409 if the stylist has a conflicting confirmed/pending booking."""
-    from datetime import timedelta
+def _check_conflict(cursor, stylist_id: int, booking_date: str, booking_time: str, duration_minutes: int, exclude_id: Optional[int] = None):
+    new_start = datetime.strptime(f"{booking_date} {booking_time}", "%Y-%m-%d %H:%M")
+    new_end = new_start + timedelta(minutes=duration_minutes)
 
-    bookings = load_data(DATA_FILE)
-    new_start = appointment_time
-    new_end = appointment_time + timedelta(minutes=duration_minutes)
+    cursor.execute("""
+        SELECT bookings.id, bookings.booking_time, services.duration_minutes
+        FROM bookings
+        JOIN services ON bookings.service_id = services.id
+        WHERE bookings.stylist_id = %s
+        AND bookings.booking_date = %s
+        AND bookings.status != 'cancelled'
+    """, (stylist_id, booking_date))
 
-    for b in bookings:
-        if b.get("id") == exclude_id:
+    for row in cursor.fetchall():
+        if exclude_id and row["id"] == exclude_id:
             continue
-        if b.get("stylist_id") != stylist_id:
-            continue
-        if b.get("status") in ("cancelled",):
-            continue
-
-        services = load_data("services")
-        svc = next((s for s in services if s["id"] == b.get("service_id")), None)
-        dur = svc["duration_minutes"] if svc else 60
-        b_start = datetime.fromisoformat(b["appointment_time"])
-        b_end = b_start + timedelta(minutes=dur)
-
+        b_start = datetime.strptime(f"{booking_date} {row['booking_time']}", "%Y-%m-%d %H:%M:%S")
+        b_end = b_start + timedelta(minutes=row["duration_minutes"])
         if not (new_end <= b_start or new_start >= b_end):
-            raise HTTPException(
-                status_code=409,
-                detail=f"Time slot conflicts with existing booking '{b['id']}'"
-            )
+            raise HTTPException(status_code=409, detail="Time slot conflicts with existing booking")
 
 
-@router.get("/", response_model=List[Booking])
+@router.get("/")
 def list_bookings(
-    stylist_id: Optional[str] = Query(None),
-    client_email: Optional[str] = Query(None),
-    status: Optional[BookingStatus] = Query(None),
-    date: Optional[str] = Query(None, description="Filter by date YYYY-MM-DD", pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    stylist_id: Optional[int] = Query(None),
+    status: Optional[str] = Query(None),
+    date: Optional[str] = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
 ):
-    """List bookings with optional filters."""
-    bookings = load_data(DATA_FILE)
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    query = """
+        SELECT 
+            bookings.id,
+            clients.name AS client,
+            stylists.name AS stylist,
+            services.name AS service,
+            bookings.booking_date,
+            bookings.booking_time,
+            bookings.status,
+            bookings.price
+        FROM bookings
+        JOIN clients ON bookings.client_id = clients.id
+        JOIN stylists ON bookings.stylist_id = stylists.id
+        JOIN services ON bookings.service_id = services.id
+        WHERE 1=1
+    """
+    params = []
 
     if stylist_id:
-        bookings = [b for b in bookings if b.get("stylist_id") == stylist_id]
-    if client_email:
-        bookings = [b for b in bookings if b.get("client_email", "").lower() == client_email.lower()]
+        query += " AND bookings.stylist_id = %s"
+        params.append(stylist_id)
     if status:
-        bookings = [b for b in bookings if b.get("status") == status.value]
+        query += " AND bookings.status = %s"
+        params.append(status)
     if date:
-        bookings = [b for b in bookings if b.get("appointment_time", "").startswith(date)]
+        query += " AND bookings.booking_date = %s"
+        params.append(date)
 
-    bookings.sort(key=lambda b: b.get("appointment_time", ""))
-    return bookings
-
-
-@router.get("/{booking_id}", response_model=Booking)
-def get_booking(booking_id: str):
-    """Get a single booking by ID."""
-    bookings = load_data(DATA_FILE)
-    for booking in bookings:
-        if booking["id"] == booking_id:
-            return booking
-    raise HTTPException(status_code=404, detail=f"Booking '{booking_id}' not found")
+    query += " ORDER BY bookings.booking_date, bookings.booking_time"
+    cursor.execute(query, params)
+    bookings = cursor.fetchall()
+    conn.close()
+    return [dict(b) for b in bookings]
 
 
-@router.post("/", response_model=Booking, status_code=201)
-def create_booking(payload: BookingCreate):
-    """Create a new booking after validating stylist, service, and time conflicts."""
-    stylist, service = _validate_booking_refs(payload.stylist_id, payload.service_id)
-    _check_conflict(payload.stylist_id, payload.appointment_time, service["duration_minutes"])
+@router.get("/{booking_id}")
+def get_booking(booking_id: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT 
+            bookings.id,
+            clients.name AS client,
+            stylists.name AS stylist,
+            services.name AS service,
+            bookings.booking_date,
+            bookings.booking_time,
+            bookings.status,
+            bookings.price
+        FROM bookings
+        JOIN clients ON bookings.client_id = clients.id
+        JOIN stylists ON bookings.stylist_id = stylists.id
+        JOIN services ON bookings.service_id = services.id
+        WHERE bookings.id = %s
+    """, (booking_id,))
+    booking = cursor.fetchone()
+    conn.close()
 
-    now = datetime.now().isoformat()
-    new_booking = {
-        "id": f"bkg-{uuid.uuid4().hex[:8]}",
-        **payload.model_dump(),
-        "appointment_time": payload.appointment_time.isoformat(),
-        "status": BookingStatus.confirmed.value,
-        "created_at": now,
-        "updated_at": now,
-    }
-
-    bookings = load_data(DATA_FILE)
-    bookings.append(new_booking)
-    save_data(DATA_FILE, bookings)
-    return new_booking
-
-
-@router.patch("/{booking_id}", response_model=Booking)
-def update_booking(booking_id: str, payload: BookingUpdate):
-    """Partially update a booking."""
-    bookings = load_data(DATA_FILE)
-    for i, booking in enumerate(bookings):
-        if booking["id"] != booking_id:
-            continue
-
-        updates = payload.model_dump(exclude_none=True)
-
-        # Re-validate refs and conflicts if stylist/service/time changes
-        new_stylist_id = updates.get("stylist_id", booking["stylist_id"])
-        new_service_id = updates.get("service_id", booking["service_id"])
-        _, service = _validate_booking_refs(new_stylist_id, new_service_id)
-
-        new_time_raw = updates.get("appointment_time", booking["appointment_time"])
-        if isinstance(new_time_raw, datetime):
-            new_time = new_time_raw
-            updates["appointment_time"] = new_time.isoformat()
-        else:
-            new_time = datetime.fromisoformat(str(new_time_raw))
-
-        _check_conflict(new_stylist_id, new_time, service["duration_minutes"], exclude_id=booking_id)
-
-        if "status" in updates and isinstance(updates["status"], BookingStatus):
-            updates["status"] = updates["status"].value
-
-        updates["updated_at"] = datetime.now().isoformat()
-        bookings[i] = {**booking, **updates}
-        save_data(DATA_FILE, bookings)
-        return bookings[i]
-
-    raise HTTPException(status_code=404, detail=f"Booking '{booking_id}' not found")
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    return dict(booking)
 
 
-@router.patch("/{booking_id}/cancel", response_model=Booking)
-def cancel_booking(booking_id: str):
-    """Cancel a booking."""
-    bookings = load_data(DATA_FILE)
-    for i, booking in enumerate(bookings):
-        if booking["id"] == booking_id:
-            if booking.get("status") == BookingStatus.cancelled.value:
-                raise HTTPException(status_code=400, detail="Booking is already cancelled")
-            bookings[i] = {
-                **booking,
-                "status": BookingStatus.cancelled.value,
-                "updated_at": datetime.now().isoformat(),
-            }
-            save_data(DATA_FILE, bookings)
-            return bookings[i]
-    raise HTTPException(status_code=404, detail=f"Booking '{booking_id}' not found")
+@router.post("/", status_code=201)
+def create_booking(
+    client_id: int,
+    stylist_id: int,
+    service_id: int,
+    booking_date: str,
+    booking_time: str,
+    price: float,
+):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    _, service = _validate_booking_refs(cursor, stylist_id, service_id)
+    _check_conflict(cursor, stylist_id, booking_date, booking_time, service["duration_minutes"])
+
+    cursor.execute("""
+        INSERT INTO bookings (client_id, stylist_id, service_id, booking_date, booking_time, status, price)
+        VALUES (%s, %s, %s, %s, %s, 'pending', %s) RETURNING *
+    """, (client_id, stylist_id, service_id, booking_date, booking_time, price))
+
+    new_booking = cursor.fetchone()
+    conn.commit()
+    conn.close()
+    return dict(new_booking)
+
+
+@router.patch("/{booking_id}/status")
+def update_booking_status(booking_id: int, status: str):
+    valid_statuses = ["pending", "confirmed", "completed", "cancelled"]
+    if status not in valid_statuses:
+        raise HTTPException(status_code=400, detail=f"Status must be one of {valid_statuses}")
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE bookings SET status = %s WHERE id = %s RETURNING *",
+        (status, booking_id)
+    )
+    updated = cursor.fetchone()
+    conn.commit()
+    conn.close()
+
+    if not updated:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    return dict(updated)
+
+
+@router.patch("/{booking_id}/cancel")
+def cancel_booking(booking_id: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT status FROM bookings WHERE id = %s", (booking_id,))
+    booking = cursor.fetchone()
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if booking["status"] == "cancelled":
+        raise HTTPException(status_code=400, detail="Booking is already cancelled")
+
+    cursor.execute(
+        "UPDATE bookings SET status = 'cancelled' WHERE id = %s RETURNING *",
+        (booking_id,)
+    )
+    updated = cursor.fetchone()
+    conn.commit()
+    conn.close()
+    return dict(updated)
 
 
 @router.delete("/{booking_id}", status_code=204)
-def delete_booking(booking_id: str):
-    """Hard delete a booking record."""
-    bookings = load_data(DATA_FILE)
-    filtered = [b for b in bookings if b["id"] != booking_id]
-    if len(filtered) == len(bookings):
-        raise HTTPException(status_code=404, detail=f"Booking '{booking_id}' not found")
-    save_data(DATA_FILE, filtered)
+def delete_booking(booking_id: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM bookings WHERE id = %s RETURNING id", (booking_id,))
+    deleted = cursor.fetchone()
+    conn.commit()
+    conn.close()
+
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Booking not found")
