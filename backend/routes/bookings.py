@@ -209,13 +209,13 @@ def delete_booking(booking_id: int):
 @router.post("/quick", status_code=201)
 def quick_booking(
     name: str,
-    email: str,
     phone: str,
     stylist_id: int,
     service_id: int,
     booking_date: str,
     booking_time: str,
     price: float,
+    email: Optional[str] = None,
 ):
     conn = get_connection()
     cursor = conn.cursor()
