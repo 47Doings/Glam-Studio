@@ -17,15 +17,12 @@ async function apiFetch(url, opts = {}) {
 const todayStr = () => new Date().toISOString().split("T")[0];
 const monthStr = () => new Date().toISOString().slice(0, 7);
 
-const time12h = (iso) => {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  let h = d.getHours();
-  const m = d.getMinutes();
+const time12h = (t) => {
+  if (!t) return "";
+  const [h, m] = t.split(":").map(Number);
   const period = h >= 12 ? "PM" : "AM";
-  h = h % 12 === 0 ? 12 : h % 12;
-  return `${h}:${String(m).padStart(2, "0")} ${period}`;
+  const hour = h % 12 === 0 ? 12 : h % 12;
+  return `${hour}:${String(m).padStart(2, "0")} ${period}`;
 };
 
 const longDate = () =>
@@ -41,6 +38,8 @@ const BADGE_STYLE = {
   pending: { background: "#2e2a0f", color: "#e8c24a" },
   completed: { background: "#2a1f0f", color: "#e8a44a" },
   cancelled: { background: "#2e0f0f", color: "#e84a4a" },
+  active: { background: "#0f2e1e", color: "#22c97e" },
+  inactive: { background: "#2e0f0f", color: "#e84a4a" },
 };
 
 const FILTERS = ["all", "pending", "confirmed", "completed", "cancelled"];
@@ -112,7 +111,7 @@ export default function Admin() {
       const [b, s, st] = await Promise.all([
         apiFetch(API("/bookings/")),
         apiFetch(API("/services/")),
-        apiFetch(API("/stylists/")),
+        apiFetch(API("/stylists/?active_only=false")),
       ]);
       setBookings(Array.isArray(b) ? b : []);
       setServices(Array.isArray(s) ? s : []);
@@ -126,41 +125,17 @@ export default function Admin() {
     load();
   }, [load]);
 
-  const serviceMap = useMemo(
-    () => Object.fromEntries(services.map((s) => [s.id, s])),
-    [services]
-  );
-  const stylistMap = useMemo(
-    () => Object.fromEntries(stylists.map((s) => [s.id, s])),
-    [stylists]
-  );
-
-  const enriched = useMemo(
-    () =>
-      bookings.map((b) => {
-        const svc = serviceMap[b.service_id];
-        const sty = stylistMap[b.stylist_id];
-        return {
-          ...b,
-          serviceName: svc?.name || "Service",
-          stylistName: sty?.name || "Stylist",
-          price: svc?.price ?? 0,
-        };
-      }),
-    [bookings, serviceMap, stylistMap]
-  );
-
   const stats = useMemo(() => {
     const today = todayStr();
     const month = monthStr();
     const earns = (b) => b.status === "confirmed" || b.status === "completed";
-    const todays = enriched.filter((b) => (b.appointment_time || "").startsWith(today));
+    const todays = bookings.filter((b) => (b.booking_date || "").startsWith(today));
     const todayRevenue = todays.filter(earns).reduce((a, b) => a + b.price, 0);
-    const monthRevenue = enriched
-      .filter((b) => (b.appointment_time || "").startsWith(month) && earns(b))
+    const monthRevenue = bookings
+      .filter((b) => (b.booking_date || "").startsWith(month) && earns(b))
       .reduce((a, b) => a + b.price, 0);
     const pendingToday = todays.filter((b) => b.status === "pending").length;
-    const activeStylists = stylists.filter((s) => s.active !== false).length;
+    const activeStylists = stylists.filter((s) => s.status === "active").length;
     return {
       todayRevenue,
       monthRevenue,
@@ -169,17 +144,25 @@ export default function Admin() {
       activeStylists,
       totalStylists: stylists.length,
     };
-  }, [enriched, stylists]);
+  }, [bookings, stylists]);
 
   const confirm = async (id) => {
-    await apiFetch(API(`/bookings/${id}`), {
+    await apiFetch(API(`/bookings/${id}/status?status=confirmed`), {
       method: "PATCH",
-      body: JSON.stringify({ status: "confirmed" }),
     });
     load();
   };
+
   const cancel = async (id) => {
     await apiFetch(API(`/bookings/${id}/cancel`), { method: "PATCH" });
+    load();
+  };
+
+  const toggleStylist = async (id, currentStatus) => {
+    const newStatus = currentStatus === "active" ? "inactive" : "active";
+    await apiFetch(API(`/stylists/${id}?status=${newStatus}`), {
+      method: "PATCH",
+    });
     load();
   };
 
@@ -214,7 +197,6 @@ export default function Admin() {
               <div style={{ width: 8, height: 8, background: theme.danger, borderRadius: "50%", position: "absolute", top: 6, right: 6 }} />
             )}
           </div>
-          <Avatar name="Admin Glam" size={36} />
         </div>
       </div>
 
@@ -247,21 +229,23 @@ export default function Admin() {
 
       {tab === "Bookings" && (
         <BookingsTab
-          bookings={enriched}
+          bookings={bookings}
           filter={filter}
           setFilter={setFilter}
           onConfirm={confirm}
           onCancel={cancel}
         />
       )}
-      {tab === "Stylists" && <StylistsTab stylists={stylists} onChange={load} />}
-      {tab === "Revenue" && <RevenueTab bookings={enriched} stylists={stylists} />}
-      {tab === "Clients" && <ClientsTab bookings={enriched} />}
+      {tab === "Stylists" && (
+        <StylistsTab stylists={stylists} onChange={load} onToggle={toggleStylist} />
+      )}
+      {tab === "Revenue" && <RevenueTab bookings={bookings} stylists={stylists} />}
+      {tab === "Clients" && <ClientsTab bookings={bookings} />}
     </div>
   );
 }
 
-// ── BOOKINGS ─────────────────────────────────────────────────────────────────
+// ── BOOKINGS ──────────────────────────────────────────────────────────────────
 function BookingsTab({ bookings, filter, setFilter, onConfirm, onCancel }) {
   const visible = filter === "all" ? bookings : bookings.filter((b) => b.status === filter);
 
@@ -295,11 +279,11 @@ function BookingsTab({ bookings, filter, setFilter, onConfirm, onCancel }) {
               borderBottom: `0.5px solid ${theme.borderSubtle}`,
             }}
           >
-            <Avatar name={b.client_name} size={40} />
+            <Avatar name={b.client} size={40} />
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 2 }}>{b.client_name}</div>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 2 }}>{b.client}</div>
               <div style={{ fontSize: 12, color: theme.textFaint }}>
-                {b.serviceName} · {b.stylistName}
+                {b.service} · {b.stylist}
               </div>
               {b.status === "pending" && (
                 <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
@@ -310,7 +294,9 @@ function BookingsTab({ bookings, filter, setFilter, onConfirm, onCancel }) {
             </div>
             <div style={{ textAlign: "right", flexShrink: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 700 }}>{formatGHS(b.price)}</div>
-              <div style={{ fontSize: 11, color: theme.textFaint, marginBottom: 6 }}>{time12h(b.appointment_time)}</div>
+              <div style={{ fontSize: 11, color: theme.textFaint, marginBottom: 6 }}>
+                {b.booking_date} {time12h(b.booking_time)}
+              </div>
               <Badge status={b.status} />
             </div>
           </div>
@@ -341,12 +327,12 @@ function ActionBtn({ color, onClick, children }) {
   );
 }
 
-// ── STYLISTS ─────────────────────────────────────────────────────────────────
+// ── STYLISTS ──────────────────────────────────────────────────────────────────
 const DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 
-function StylistsTab({ stylists, onChange }) {
+function StylistsTab({ stylists, onChange, onToggle }) {
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: "", bio: "", specialties: "", service_ids: "" });
+  const [form, setForm] = useState({ name: "", specialty: "" });
   const [hours, setHours] = useState({
     monday: { enabled: true, start: "09:00", end: "17:00" },
     tuesday: { enabled: true, start: "09:00", end: "17:00" },
@@ -382,23 +368,20 @@ function StylistsTab({ stylists, onChange }) {
   };
 
   const save = async () => {
-    const working_hours = {};
-    for (const day of DAYS) {
-      working_hours[day] = hours[day].enabled
-        ? { start: hours[day].start, end: hours[day].end }
-        : null;
-    }
-    await apiFetch(API("/stylists/"), {
-      method: "POST",
-      body: JSON.stringify({
-        name: form.name,
-        bio: form.bio,
-        specialties: form.specialties.split(",").map((s) => s.trim()).filter(Boolean),
-        service_ids: form.service_ids.split(",").map((s) => s.trim()).filter(Boolean),
-        working_hours,
-      }),
+    const working_days = DAYS.filter((d) => hours[d].enabled);
+    const working_hours_start = hours[working_days[0]]?.start || "09:00";
+    const working_hours_end = hours[working_days[0]]?.end || "17:00";
+
+    const params = new URLSearchParams({
+      name: form.name,
+      specialty: form.specialty,
+      working_hours_start,
+      working_hours_end,
+      working_days: working_days,
     });
-    setForm({ name: "", bio: "", specialties: "", service_ids: "" });
+
+    await apiFetch(API(`/stylists/?${params}`), { method: "POST" });
+    setForm({ name: "", specialty: "" });
     setShowForm(false);
     onChange();
   };
@@ -425,12 +408,14 @@ function StylistsTab({ stylists, onChange }) {
 
       {showForm && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
-          <input style={inputStyle} placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          <input style={inputStyle} placeholder="Bio" value={form.bio} onChange={(e) => setForm({ ...form, bio: e.target.value })} />
-          <input style={inputStyle} placeholder="Specialties (comma separated)" value={form.specialties} onChange={(e) => setForm({ ...form, specialties: e.target.value })} />
-          <input style={inputStyle} placeholder="Service IDs e.g. svc-0001, svc-0002" value={form.service_ids} onChange={(e) => setForm({ ...form, service_ids: e.target.value })} />
+          <input style={inputStyle} placeholder="Name" value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          <input style={inputStyle} placeholder="Specialty e.g. Full Braids" value={form.specialty}
+            onChange={(e) => setForm({ ...form, specialty: e.target.value })} />
 
-          <div style={{ fontSize: 11, color: theme.textFaint, letterSpacing: "1px", textTransform: "uppercase", marginTop: 8 }}>Working Hours</div>
+          <div style={{ fontSize: 11, color: theme.textFaint, letterSpacing: "1px", textTransform: "uppercase", marginTop: 8 }}>
+            Working Days & Hours
+          </div>
           {DAYS.map((day) => (
             <div key={day} style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <input
@@ -441,19 +426,11 @@ function StylistsTab({ stylists, onChange }) {
               <span style={{ fontSize: 12, color: theme.text, width: 90, textTransform: "capitalize" }}>{day}</span>
               {hours[day].enabled && (
                 <>
-                  <input
-                    type="time"
-                    style={timeInput}
-                    value={hours[day].start}
-                    onChange={(e) => setHours({ ...hours, [day]: { ...hours[day], start: e.target.value } })}
-                  />
+                  <input type="time" style={timeInput} value={hours[day].start}
+                    onChange={(e) => setHours({ ...hours, [day]: { ...hours[day], start: e.target.value } })} />
                   <span style={{ fontSize: 12, color: theme.textFaint }}>to</span>
-                  <input
-                    type="time"
-                    style={timeInput}
-                    value={hours[day].end}
-                    onChange={(e) => setHours({ ...hours, [day]: { ...hours[day], end: e.target.value } })}
-                  />
+                  <input type="time" style={timeInput} value={hours[day].end}
+                    onChange={(e) => setHours({ ...hours, [day]: { ...hours[day], end: e.target.value } })} />
                 </>
               )}
               {!hours[day].enabled && <span style={{ fontSize: 12, color: theme.textFaint }}>Day off</span>}
@@ -483,28 +460,50 @@ function StylistsTab({ stylists, onChange }) {
       {stylists.map((s) => (
         <div
           key={s.id}
-          style={{ display: "flex", gap: 12, alignItems: "center", padding: "12px 0", borderBottom: `0.5px solid ${theme.borderSubtle}` }}
+          style={{
+            display: "flex",
+            gap: 12,
+            alignItems: "center",
+            padding: "12px 0",
+            borderBottom: `0.5px solid ${theme.borderSubtle}`,
+          }}
         >
           <Avatar name={s.name} size={40} />
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 14, fontWeight: 600 }}>{s.name}</div>
-            <div style={{ fontSize: 12, color: theme.textFaint }}>
-              {s.specialties?.join(", ") || "—"}
-            </div>
+            <div style={{ fontSize: 12, color: theme.textFaint }}>{s.specialty || "—"}</div>
           </div>
-          <Badge status={s.active !== false ? "confirmed" : "cancelled"} />
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Badge status={s.status} />
+            <button
+              onClick={() => onToggle(s.id, s.status)}
+              style={{
+                padding: "4px 10px",
+                borderRadius: 6,
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: "pointer",
+                background: theme.cardAlt,
+                border: `1px solid ${theme.border}`,
+                color: theme.textMuted,
+                fontFamily: theme.font,
+              }}
+            >
+              {s.status === "active" ? "Deactivate" : "Activate"}
+            </button>
+          </div>
         </div>
       ))}
     </div>
   );
 }
 
-// ── REVENUE ──────────────────────────────────────────────────────────────────
+// ── REVENUE ───────────────────────────────────────────────────────────────────
 function RevenueTab({ bookings, stylists }) {
   const earns = (b) => b.status === "confirmed" || b.status === "completed";
   const rows = stylists
     .map((s) => {
-      const theirs = bookings.filter((b) => b.stylist_id === s.id && earns(b));
+      const theirs = bookings.filter((b) => b.stylist === s.name && earns(b));
       return {
         id: s.id,
         name: s.name,
@@ -536,16 +535,18 @@ function RevenueTab({ bookings, stylists }) {
   );
 }
 
-// ── CLIENTS ──────────────────────────────────────────────────────────────────
+// ── CLIENTS ───────────────────────────────────────────────────────────────────
 function ClientsTab({ bookings }) {
   const byClient = {};
   for (const b of bookings) {
-    const key = b.client_email || b.client_name;
+    const key = b.client;
     if (!byClient[key]) {
-      byClient[key] = { name: b.client_name, email: b.client_email, count: 0, total: 0 };
+      byClient[key] = { name: b.client, count: 0, total: 0 };
     }
     byClient[key].count += 1;
-    if (b.status === "confirmed" || b.status === "completed") byClient[key].total += b.price;
+    if (b.status === "confirmed" || b.status === "completed") {
+      byClient[key].total += b.price;
+    }
   }
   const rows = Object.values(byClient).sort((a, b) => b.total - a.total);
 
@@ -556,11 +557,10 @@ function ClientsTab({ bookings }) {
       </div>
       {rows.length === 0 && <p style={{ color: theme.textFaint, fontSize: 13 }}>No clients yet.</p>}
       {rows.map((c) => (
-        <div key={c.email || c.name} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: `0.5px solid ${theme.borderSubtle}` }}>
+        <div key={c.name} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: `0.5px solid ${theme.borderSubtle}` }}>
           <Avatar name={c.name} size={40} />
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 14, fontWeight: 600 }}>{c.name}</div>
-            <div style={{ fontSize: 12, color: theme.textFaint }}>{c.email || "—"}</div>
           </div>
           <div style={{ textAlign: "right" }}>
             <div style={{ fontSize: 14, fontWeight: 700 }}>{formatGHS(c.total)}</div>

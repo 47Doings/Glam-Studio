@@ -1,5 +1,5 @@
-import React from "react";
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
+import { theme, applyTheme } from "../theme";
 
 const DEFAULT_API = "http://localhost:8000";
 
@@ -7,103 +7,129 @@ export default function Settings() {
   const [apiUrl, setApiUrl] = useState(
     () => localStorage.getItem("apiUrl") || DEFAULT_API
   );
-
-  const [theme, setTheme] = useState(
+  const [currentTheme, setCurrentTheme] = useState(
     () => localStorage.getItem("theme") || "dark"
   );
 
-  // ── SAVE API URL GLOBALLY ─────────────────────────────
   useEffect(() => {
     localStorage.setItem("apiUrl", apiUrl);
   }, [apiUrl]);
 
-  // ── APPLY THEME GLOBALLY ──────────────────────────────
   useEffect(() => {
-    localStorage.setItem("theme", theme);
-
-    if (theme === "dark") {
-      document.body.style.background = "#0d0d0d";
-      document.body.style.color = "#e0e0e0";
-    } else {
-      document.body.style.background = "#f5f5f5";
-      document.body.style.color = "#111";
-    }
-  }, [theme]);
-
-  const box = {
-    background: "#111",
-    border: "1px solid #222",
-    borderRadius: 12,
-    padding: 20,
-    maxWidth: 600,
-    marginTop: 16,
-  };
-
-  const input = {
-    width: "100%",
-    padding: 12,
-    background: "#0d0d0d",
-    border: "1px solid #2a2a2a",
-    borderRadius: 8,
-    color: "#e0e0e0",
-    outline: "none",
-    marginTop: 8,
-  };
+    localStorage.setItem("theme", currentTheme);
+    applyTheme(currentTheme);
+  }, [currentTheme]);
 
   const resetSettings = () => {
     setApiUrl(DEFAULT_API);
-    setTheme("dark");
+    setCurrentTheme("dark");
     localStorage.removeItem("apiUrl");
     localStorage.removeItem("theme");
+    applyTheme("dark");
+  };
+
+  const sectionTitle = {
+    fontSize: 11,
+    letterSpacing: "1.5px",
+    color: theme.textFaint,
+    textTransform: "uppercase",
+    marginBottom: 12,
+  };
+
+  const card = {
+    background: theme.card,
+    border: `1.5px solid ${theme.border}`,
+    borderRadius: theme.radiusLg,
+    padding: 20,
+    marginBottom: 12,
+  };
+
+  const inputStyle = {
+    width: "100%",
+    padding: "11px 14px",
+    background: theme.cardAlt,
+    border: `1.5px solid ${theme.border}`,
+    borderRadius: theme.radius,
+    color: theme.text,
+    fontFamily: theme.font,
+    fontSize: 14,
+    outline: "none",
+    marginTop: 8,
+    boxSizing: "border-box",
   };
 
   return (
-    <div style={{ padding: 24 }}>
-      <h2 style={{ fontFamily: "'Playfair Display', serif", color: "inherit" }}>
-        Settings
-      </h2>
+    <div style={{ background: theme.bgRaised, minHeight: "100vh", color: theme.text, padding: 20 }}>
+      <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>Settings</h2>
+      <p style={{ fontSize: 13, color: theme.textFaint, marginBottom: 24 }}>
+        Configure your app preferences
+      </p>
 
-      {/* API URL CONTROL */}
-      <div style={box}>
-        <label style={{ fontSize: 12, color: "#666" }}>API URL</label>
+      {/* API URL */}
+      <div style={card}>
+        <div style={sectionTitle}>API URL</div>
         <input
           value={apiUrl}
           onChange={(e) => setApiUrl(e.target.value)}
-          style={input}
+          style={inputStyle}
+          placeholder="http://localhost:8000"
         />
-        <p style={{ fontSize: 11, color: "#555", marginTop: 8 }}>
+        <p style={{ fontSize: 12, color: theme.textFaint, marginTop: 8 }}>
           Used by Booking + Admin for all requests
         </p>
       </div>
 
-      {/* THEME CONTROL */}
-      <div style={box}>
-        <label style={{ fontSize: 12, color: "#666" }}>Theme</label>
-        <select
-          value={theme}
-          onChange={(e) => setTheme(e.target.value)}
-          style={input}
-        >
-          <option value="dark">Dark</option>
-          <option value="light">Light</option>
-        </select>
-
-        <p style={{ fontSize: 11, color: "#555", marginTop: 8 }}>
+      {/* THEME */}
+      <div style={card}>
+        <div style={sectionTitle}>Theme</div>
+        <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+          {["dark", "light"].map((t) => (
+            <div
+              key={t}
+              onClick={() => setCurrentTheme(t)}
+              style={{
+                flex: 1,
+                padding: "12px 0",
+                textAlign: "center",
+                borderRadius: theme.radius,
+                border: `1.5px solid ${currentTheme === t ? theme.accent : theme.border}`,
+                background: currentTheme === t ? "rgba(34,201,126,0.08)" : theme.cardAlt,
+                color: currentTheme === t ? theme.accent : theme.textMuted,
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: "pointer",
+                fontFamily: theme.font,
+                transition: "all 0.2s",
+                textTransform: "capitalize",
+              }}
+            >
+              {t === "dark" ? "🌙 Dark" : "☀️ Light"}
+            </div>
+          ))}
+        </div>
+        <p style={{ fontSize: 12, color: theme.textFaint, marginTop: 8 }}>
           Controls global UI appearance
         </p>
       </div>
 
       {/* RESET */}
-      <div style={box}>
+      <div style={card}>
+        <div style={sectionTitle}>Reset</div>
+        <p style={{ fontSize: 13, color: theme.textMuted, marginBottom: 12 }}>
+          Restore all settings to their defaults
+        </p>
         <button
           onClick={resetSettings}
           style={{
-            padding: "10px 16px",
-            background: "#1a1a1a",
-            border: "1px solid #333",
-            color: "#c06060",
-            borderRadius: 8,
+            padding: "10px 20px",
+            background: "transparent",
+            border: `1.5px solid ${theme.danger}`,
+            color: theme.danger,
+            borderRadius: theme.radius,
+            fontSize: 13,
+            fontWeight: 600,
             cursor: "pointer",
+            fontFamily: theme.font,
           }}
         >
           Reset settings

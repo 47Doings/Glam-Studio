@@ -204,3 +204,71 @@ def delete_booking(booking_id: int):
 
     if not deleted:
         raise HTTPException(status_code=404, detail="Booking not found")
+
+
+@router.post("/quick", status_code=201)
+def quick_booking(
+    name: str,
+    email: str,
+    phone: str,
+    stylist_id: int,
+    service_id: int,
+    booking_date: str,
+    booking_time: str,
+    price: float,
+):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # Find or create client
+    client_id = None
+
+    if email:
+        cursor.execute("SELECT id FROM clients WHERE email = %s", (email,))
+        client = cursor.fetchone()
+        if client:
+            client_id = client["id"]
+
+    if not client_id:
+        cursor.execute(
+            "INSERT INTO clients (name, phone, email) VALUES (%s, %s, %s) RETURNING id",
+            (name, phone or "", email if email else None)
+        )
+        client_id = cursor.fetchone()["id"]
+
+    # Validate stylist and service
+    _, service = _validate_booking_refs(cursor, stylist_id, service_id)
+
+    # Check conflicts
+    _check_conflict(cursor, stylist_id, booking_date, booking_time, service["duration_minutes"])
+
+    # Create booking
+    cursor.execute("""
+        INSERT INTO bookings (client_id, stylist_id, service_id, booking_date, booking_time, status, price)
+        VALUES (%s, %s, %s, %s, %s, 'pending', %s) RETURNING id
+    """, (client_id, stylist_id, service_id, booking_date, booking_time, price))
+
+    booking_id = cursor.fetchone()["id"]
+
+    # Return full booking with joined names
+    cursor.execute("""
+        SELECT 
+            bookings.id,
+            clients.name AS client,
+            stylists.name AS stylist,
+            services.name AS service,
+            bookings.booking_date,
+            bookings.booking_time,
+            bookings.status,
+            bookings.price
+        FROM bookings
+        JOIN clients ON bookings.client_id = clients.id
+        JOIN stylists ON bookings.stylist_id = stylists.id
+        JOIN services ON bookings.service_id = services.id
+        WHERE bookings.id = %s
+    """, (booking_id,))
+
+    result = cursor.fetchone()
+    conn.commit()
+    conn.close()
+    return dict(result)

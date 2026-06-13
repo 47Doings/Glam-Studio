@@ -78,23 +78,18 @@ export default function Booking() {
       .then((r) => r.json())
       .then((d) => setServices(Array.isArray(d) ? d : []))
       .catch(console.error);
-    fetch(`${getAPI()}/stylists/`)
+    fetch(`${getAPI()}/stylists/?active_only=false`)
       .then((r) => r.json())
       .then((d) => setStylists(Array.isArray(d) ? d : []))
       .catch(console.error);
   }, []);
 
 const visibleStylists = useMemo(() => {
-    const active = stylists.filter((s) => s.active !== false);
-    if (!selectedService) return active;
-    return active.filter(
-      (s) =>
-        s.service_ids?.includes(selectedService.id) ||
-        s.specialties?.some(
-          (sp) => sp.toLowerCase() === selectedService.name.toLowerCase()
-        )
-    );
-  }, [stylists, selectedService]);
+  if (!selectedService) return stylists;
+  return stylists.filter((s) =>
+    s.specialty?.toLowerCase() === selectedService.name.toLowerCase()
+  );
+}, [stylists, selectedService]);
 
   useEffect(() => {
     if (
@@ -140,18 +135,19 @@ const visibleStylists = useMemo(() => {
     setError("");
 
     try {
-      const res = await fetch(`${getAPI()}/bookings/`, {
+      const params = new URLSearchParams({
+        name: form.name,
+        email: form.email.trim() || "",
+        phone: form.phone.trim() || "",
+        stylist_id: selectedStylist.id,
+        service_id: selectedService.id,
+        booking_date: selectedDate,
+        booking_time: selectedTime,
+        price: selectedService.price,
+      });
+
+      const res = await fetch(`${getAPI()}/bookings/quick?${params}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          stylist_id: selectedStylist.id,
-          service_id: selectedService.id,
-          client_name: form.name,
-          client_email: form.email.trim() || null,
-          client_phone: form.phone.trim() || null,
-          notes: form.notes,
-          appointment_time: `${selectedDate}T${selectedTime}:00`,
-        }),
       });
       const data = await res.json();
       if (!res.ok) {
