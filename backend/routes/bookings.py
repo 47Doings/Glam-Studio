@@ -95,6 +95,48 @@ def list_bookings(
     conn.close()
     return [dict(b) for b in bookings]
 
+@router.get("/client")
+def get_client_bookings(
+    phone: Optional[str] = Query(None),
+    email: Optional[str] = Query(None),
+):
+    if not phone and not email:
+        raise HTTPException(status_code=400, detail="Provide phone or email")
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # Find client
+    if email:
+        cursor.execute("SELECT id FROM clients WHERE email = %s", (email,))
+    else:
+        cursor.execute("SELECT id FROM clients WHERE phone = %s", (phone,))
+
+    client = cursor.fetchone()
+    if not client:
+        raise HTTPException(status_code=404, detail="No client found with those details")
+
+    # Fetch their bookings, latest first
+    cursor.execute("""
+        SELECT 
+            bookings.id,
+            services.name AS service,
+            stylists.name AS stylist,
+            bookings.booking_date,
+            bookings.booking_time,
+            bookings.status,
+            bookings.price
+        FROM bookings
+        JOIN services ON bookings.service_id = services.id
+        JOIN stylists ON bookings.stylist_id = stylists.id
+        WHERE bookings.client_id = %s
+        ORDER BY bookings.booking_date DESC, bookings.booking_time DESC
+    """, (client["id"],))
+
+    bookings = cursor.fetchall()
+    conn.close()
+    return [dict(b) for b in bookings]
+
 
 @router.get("/{booking_id}")
 def get_booking(booking_id: int):

@@ -4,6 +4,7 @@ import Booking from "./pages/booking.jsx";
 import Admin from "./pages/admin.jsx";
 import Settings from "./pages/settings.jsx";
 import { theme, applyTheme } from "./theme";
+import MyBookings from "./pages/MyBookings.jsx";
 
 export default function App() {
   const [page, setPage] = useState("booking");
@@ -51,11 +52,15 @@ export default function App() {
         <button style={btn(page === "settings")} onClick={() => setPage("settings")}>
           Settings
         </button>
+        <button style={btn(page === "mybookings")} onClick={() => setPage("mybookings")}>
+          My Bookings
+        </button>
       </div>
 
       {page === "booking" && <Booking />}
       {page === "admin" && <Admin />}
       {page === "settings" && <Settings onThemeChange={setThemeMode} />}
+      {page === "mybookings" && <MyBookings />}
     </div>
   );
 }
