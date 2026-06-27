@@ -55,7 +55,7 @@ const inputStyle = {
   width: "100%",
 };
 
-export default function Booking() {
+export default function Booking({ token }) {
   const [services, setServices] = useState([]);
   const [stylists, setStylists] = useState([]);
   const [slots, setSlots] = useState([]);
@@ -84,12 +84,12 @@ export default function Booking() {
       .catch(console.error);
   }, []);
 
-const visibleStylists = useMemo(() => {
-  if (!selectedService) return stylists;
-  return stylists.filter((s) =>
-    s.specialty?.toLowerCase() === selectedService.name.toLowerCase()
-  );
-}, [stylists, selectedService]);
+  const visibleStylists = useMemo(() => {
+    if (!selectedService) return stylists;
+    return stylists.filter((s) =>
+      s.specialty?.toLowerCase() === selectedService.name.toLowerCase()
+    );
+  }, [stylists, selectedService]);
 
   useEffect(() => {
     if (
@@ -121,13 +121,10 @@ const visibleStylists = useMemo(() => {
       ? `${selectedDateObj.day} ${selectedDateObj.num}, ${to12h(selectedTime)}`
       : "";
 
-  const ready =
-    selectedService &&
-    selectedStylist &&
-    selectedDate &&
-    selectedTime &&
-    form.name.trim() &&
-    (form.email.trim() || form.phone.trim());
+  const ready = token
+    ? selectedService && selectedStylist && selectedDate && selectedTime
+    : selectedService && selectedStylist && selectedDate && selectedTime &&
+      form.name.trim() && (form.email.trim() || form.phone.trim());
 
   async function submitBooking() {
     if (!ready || loading) return;
@@ -135,26 +132,39 @@ const visibleStylists = useMemo(() => {
     setError("");
 
     try {
-      const params = new URLSearchParams({
-        name: form.name,
-        email: form.email.trim() || "",
-        phone: form.phone.trim() || "",
-        stylist_id: selectedStylist.id,
-        service_id: selectedService.id,
-        booking_date: selectedDate,
-        booking_time: selectedTime,
-        price: selectedService.price,
-      });
+      let res, data;
 
-      const res = await fetch(`${getAPI()}/bookings/quick?${params}`, {
-        method: "POST",
-      });
-      const data = await res.json();
+      if (token) {
+        const params = new URLSearchParams({
+          stylist_id: selectedStylist.id,
+          service_id: selectedService.id,
+          booking_date: selectedDate,
+          booking_time: selectedTime,
+        });
+        res = await fetch(`${getAPI()}/bookings/?${params}`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      } else {
+        const params = new URLSearchParams({
+          name: form.name,
+          email: form.email.trim() || "",
+          phone: form.phone.trim() || "",
+          stylist_id: selectedStylist.id,
+          service_id: selectedService.id,
+          booking_date: selectedDate,
+          booking_time: selectedTime,
+        });
+        res = await fetch(`${getAPI()}/bookings/quick?${params}`, {
+          method: "POST",
+        });
+      }
+
+      data = await res.json();
       if (!res.ok) {
-        const detail =
-          typeof data.detail === "string"
-            ? data.detail
-            : "Could not complete booking. Please try again.";
+        const detail = typeof data.detail === "string"
+          ? data.detail
+          : "Could not complete booking. Please try again.";
         setError(detail);
         setLoading(false);
         return;
@@ -336,23 +346,25 @@ const visibleStylists = useMemo(() => {
         />
       </div>
 
-      {/* DETAILS */}
-      <div style={{ padding: "16px 12px 0" }}>
-        <div style={sectionTitle}>Your Details</div>
-        <p style={{ fontSize: 12, color: theme.textFaint, marginBottom: 8 }}>
-          Name is required · Email or phone required
-        </p>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <input style={inputStyle} placeholder="Full name" value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          <input style={inputStyle} placeholder="Email" type="email" value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })} />
-          <input style={inputStyle} placeholder="Phone (optional)" value={form.phone}
-            onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-          <textarea style={{ ...inputStyle, resize: "vertical", minHeight: 64 }} placeholder="Notes (optional)" value={form.notes}
-            onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+      {/* YOUR DETAILS - guest only */}
+      {!token && (
+        <div style={{ padding: "16px 12px 0" }}>
+          <div style={sectionTitle}>Your Details</div>
+          <p style={{ fontSize: 12, color: theme.textFaint, marginBottom: 8 }}>
+            Name is required · Email or phone required
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <input style={inputStyle} placeholder="Full name" value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            <input style={inputStyle} placeholder="Email" type="email" value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            <input style={inputStyle} placeholder="Phone (optional)" value={form.phone}
+              onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+            <textarea style={{ ...inputStyle, resize: "vertical", minHeight: 64 }} placeholder="Notes (optional)" value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* SUMMARY */}
       <div style={{ margin: "16px 12px 8px" }}>
@@ -364,7 +376,7 @@ const visibleStylists = useMemo(() => {
       </div>
 
       <div style={{ margin: "0 12px 8px" }}>
-        {attempted && !ready && <>
+        {!token && attempted && !ready && <>
           {!selectedService && <p style={{ fontSize: 13, color: "#e84a4a", marginBottom: 6, fontWeight: 600 }}>· Select a service</p>}
           {!selectedStylist && <p style={{ fontSize: 13, color: "#e84a4a", marginBottom: 6, fontWeight: 600 }}>· Pick a stylist</p>}
           {!selectedDate && <p style={{ fontSize: 13, color: "#e84a4a", marginBottom: 6, fontWeight: 600 }}>· Select a date</p>}

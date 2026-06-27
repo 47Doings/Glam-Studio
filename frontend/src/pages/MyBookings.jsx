@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { theme } from "../theme";
 
 const getAPI = () => localStorage.getItem("apiUrl") || "http://localhost:8000";
@@ -9,19 +9,6 @@ const sectionTitle = {
   color: theme.textFaint,
   textTransform: "uppercase",
   marginBottom: 12,
-};
-
-const inputStyle = {
-  background: theme.cardAlt,
-  border: `1.5px solid ${theme.border}`,
-  borderRadius: 10,
-  padding: "11px 14px",
-  color: theme.text,
-  fontFamily: theme.font,
-  fontSize: 14,
-  outline: "none",
-  width: "100%",
-  boxSizing: "border-box",
 };
 
 const STATUS_CONFIG = {
@@ -52,6 +39,25 @@ function StatusBadge({ status }) {
     </span>
   );
 }
+
+function Detail({ label, value }) {
+  return (
+    <div>
+      <div style={{ fontSize: 10, color: theme.textFaint, letterSpacing: "0.8px", textTransform: "uppercase", marginBottom: 2 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 13, fontWeight: 600 }}>{value}</div>
+    </div>
+  );
+}
+
+const to12h = (t) => {
+  if (!t) return "";
+  const [h, m] = t.split(":").map(Number);
+  const period = h >= 12 ? "PM" : "AM";
+  const hour = h % 12 === 0 ? 12 : h % 12;
+  return `${hour}:${String(m).padStart(2, "0")} ${period}`;
+};
 
 function BookingCard({ booking, onCancel, cancelling }) {
   const isActive = ACTIVE.includes(booking.status);
@@ -114,59 +120,33 @@ function BookingCard({ booking, onCancel, cancelling }) {
   );
 }
 
-function Detail({ label, value }) {
-  return (
-    <div>
-      <div style={{ fontSize: 10, color: theme.textFaint, letterSpacing: "0.8px", textTransform: "uppercase", marginBottom: 2 }}>
-        {label}
-      </div>
-      <div style={{ fontSize: 13, fontWeight: 600 }}>{value}</div>
-    </div>
-  );
-}
-
-const to12h = (t) => {
-  if (!t) return "";
-  const [h, m] = t.split(":").map(Number);
-  const period = h >= 12 ? "PM" : "AM";
-  const hour = h % 12 === 0 ? 12 : h % 12;
-  return `${hour}:${String(m).padStart(2, "0")} ${period}`;
-};
-
-export default function MyBookings() {
-  const [lookup, setLookup] = useState("");
+export default function MyBookings({ token }) {
   const [bookings, setBookings] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [searched, setSearched] = useState(false);
   const [cancelling, setCancelling] = useState(null);
 
+  useEffect(() => {
+    fetchBookings();
+  }, []);
+
   async function fetchBookings() {
-    const val = lookup.trim();
-    if (!val) return;
     setLoading(true);
     setError("");
-    setSearched(false);
-
-    const isEmail = val.includes("@");
-    const params = new URLSearchParams(isEmail ? { email: val } : { phone: val });
-
     try {
-      const res = await fetch(`${getAPI()}/bookings/client?${params}`);
+      const res = await fetch(`${getAPI()}/bookings/client`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.detail || "No bookings found.");
-        setBookings([]);
+        setError(data.detail || "Could not load bookings.");
       } else {
         setBookings(Array.isArray(data) ? data : []);
       }
     } catch {
-      setError("Could not reach the server. Please try again.");
-      setBookings([]);
+      setError("Could not reach the server.");
     }
-
     setLoading(false);
-    setSearched(true);
   }
 
   async function cancelBooking(bookingId) {
@@ -174,6 +154,7 @@ export default function MyBookings() {
     try {
       const res = await fetch(`${getAPI()}/bookings/${bookingId}/cancel`, {
         method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         setBookings((prev) =>
@@ -194,65 +175,27 @@ export default function MyBookings() {
 
   return (
     <div style={{ background: theme.bgRaised, minHeight: "100vh", color: theme.text, paddingBottom: 32 }}>
-      {/* HERO */}
-      <div
-        style={{
-          background: theme.card,
-          borderRadius: 12,
-          margin: 12,
-          padding: 20,
-        }}
-      >
+      <div style={{ background: theme.card, borderRadius: 12, margin: 12, padding: 20 }}>
         <div style={{ fontSize: 11, color: "#888", letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>
           Glam Studio
         </div>
         <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>My Bookings</div>
-        <div style={{ fontSize: 13, color: theme.textMuted }}>
-          Enter your phone or email to view your appointments
-        </div>
+        <div style={{ fontSize: 13, color: theme.textMuted }}>Your upcoming and past appointments</div>
       </div>
 
-      {/* LOOKUP */}
-      <div style={{ padding: "0 12px 0" }}>
-        <div style={sectionTitle}>Find your bookings</div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <input
-            style={{ ...inputStyle, flex: 1 }}
-            placeholder="Phone or email"
-            value={lookup}
-            onChange={(e) => setLookup(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && fetchBookings()}
-          />
-          <button
-            onClick={fetchBookings}
-            disabled={loading || !lookup.trim()}
-            style={{
-              background: lookup.trim() ? theme.accent : theme.cardAlt,
-              border: `1.5px solid ${lookup.trim() ? theme.accent : theme.border}`,
-              borderRadius: 10,
-              padding: "0 18px",
-              color: lookup.trim() ? theme.accentInk : "#888",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: lookup.trim() && !loading ? "pointer" : "default",
-              fontFamily: theme.font,
-              whiteSpace: "nowrap",
-              transition: "all 0.2s",
-            }}
-          >
-            {loading ? "…" : "Look up"}
-          </button>
+      {loading && (
+        <div style={{ padding: "24px 12px", textAlign: "center", color: theme.textFaint, fontSize: 13 }}>
+          Loading your bookings…
         </div>
-      </div>
+      )}
 
       {error && (
         <div style={{ margin: "12px 12px 0", color: theme.danger, fontSize: 13 }}>{error}</div>
       )}
 
-      {/* RESULTS */}
-      {searched && bookings.length === 0 && !error && (
+      {!loading && bookings.length === 0 && !error && (
         <div style={{ padding: "24px 12px", textAlign: "center", color: theme.textFaint, fontSize: 13 }}>
-          No bookings found for those details.
+          You have no bookings yet.
         </div>
       )}
 
@@ -266,7 +209,6 @@ export default function MyBookings() {
               ))}
             </div>
           )}
-
           {history.length > 0 && (
             <div style={{ padding: "16px 12px 0" }}>
               <div style={sectionTitle}>History</div>

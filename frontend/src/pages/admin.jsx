@@ -45,6 +45,19 @@ const BADGE_STYLE = {
 const FILTERS = ["all", "pending", "confirmed", "completed", "cancelled"];
 const TABS = ["Bookings", "Stylists", "Revenue", "Clients"];
 
+const inputStyle = {
+  background: theme.cardAlt,
+  border: `1.5px solid ${theme.border}`,
+  borderRadius: 10,
+  padding: "11px 14px",
+  color: theme.text,
+  fontFamily: theme.font,
+  fontSize: 14,
+  outline: "none",
+  width: "100%",
+  boxSizing: "border-box",
+};
+
 function Badge({ status }) {
   const s = BADGE_STYLE[status] || BADGE_STYLE.pending;
   return (
@@ -97,7 +110,88 @@ function Pill({ active, onClick, children, round }) {
   );
 }
 
+function AdminLogin({ onLogin }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleLogin() {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch(API("/auth/admin/login"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.detail || "Invalid credentials.");
+      } else {
+        localStorage.setItem("adminToken", data.access_token);
+        onLogin(data.access_token);
+      }
+    } catch {
+      setError("Could not reach the server.");
+    }
+    setLoading(false);
+  }
+
+  return (
+    <div style={{ background: theme.bgRaised, minHeight: "100vh", color: theme.text, padding: 16 }}>
+      <div style={{ background: theme.card, borderRadius: 12, padding: 20, marginBottom: 16 }}>
+        <div style={{ fontSize: 11, color: "#888", letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>
+          Glam Studio
+        </div>
+        <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>Admin Login</div>
+        <div style={{ fontSize: 13, color: theme.textMuted }}>Sign in to access the dashboard</div>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <input
+          style={inputStyle}
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+        />
+        <input
+          style={inputStyle}
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+        />
+        {error && <div style={{ color: theme.danger, fontSize: 13 }}>{error}</div>}
+        <button
+          onClick={handleLogin}
+          disabled={loading || !email || !password}
+          style={{
+            background: theme.accent,
+            border: "none",
+            borderRadius: 10,
+            padding: "12px 0",
+            color: theme.accentInk,
+            fontSize: 14,
+            fontWeight: 700,
+            cursor: loading ? "default" : "pointer",
+            fontFamily: theme.font,
+            opacity: loading ? 0.6 : 1,
+          }}
+        >
+          {loading ? "Signing in…" : "Sign In"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function Admin() {
+  const [adminToken, setAdminToken] = useState(
+    () => localStorage.getItem("adminToken") || null
+  );
   const [tab, setTab] = useState("Bookings");
   const [bookings, setBookings] = useState([]);
   const [services, setServices] = useState([]);
@@ -105,21 +199,27 @@ export default function Admin() {
   const [filter, setFilter] = useState("all");
   const [loading, setLoading] = useState(true);
 
+  const authHeaders = { Authorization: `Bearer ${adminToken}` };
+
   const load = useCallback(async () => {
+    if (!adminToken) return;
     try {
       setLoading(true);
       const [b, s, st] = await Promise.all([
-        apiFetch(API("/bookings/")),
+        apiFetch(API("/bookings/"), { headers: authHeaders }),
         apiFetch(API("/services/")),
         apiFetch(API("/stylists/?active_only=false")),
       ]);
       setBookings(Array.isArray(b) ? b : []);
       setServices(Array.isArray(s) ? s : []);
       setStylists(Array.isArray(st) ? st : []);
+    } catch {
+      setAdminToken(null);
+      localStorage.removeItem("adminToken");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [adminToken]);
 
   useEffect(() => {
     load();
@@ -149,12 +249,16 @@ export default function Admin() {
   const confirm = async (id) => {
     await apiFetch(API(`/bookings/${id}/status?status=confirmed`), {
       method: "PATCH",
+      headers: authHeaders,
     });
     load();
   };
 
   const cancel = async (id) => {
-    await apiFetch(API(`/bookings/${id}/cancel`), { method: "PATCH" });
+    await apiFetch(API(`/bookings/${id}/cancel`), {
+      method: "PATCH",
+      headers: authHeaders,
+    });
     load();
   };
 
@@ -165,6 +269,15 @@ export default function Admin() {
     });
     load();
   };
+
+  function handleLogout() {
+    localStorage.removeItem("adminToken");
+    setAdminToken(null);
+  }
+
+  if (!adminToken) {
+    return <AdminLogin onLogin={setAdminToken} />;
+  }
 
   return (
     <div style={{ background: theme.bg, minHeight: "100vh", color: theme.text, padding: 16 }}>
@@ -197,6 +310,22 @@ export default function Admin() {
               <div style={{ width: 8, height: 8, background: theme.danger, borderRadius: "50%", position: "absolute", top: 6, right: 6 }} />
             )}
           </div>
+          <button
+            onClick={handleLogout}
+            style={{
+              background: "none",
+              border: `1px solid ${theme.border}`,
+              borderRadius: 8,
+              padding: "6px 12px",
+              color: theme.danger,
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: "pointer",
+              fontFamily: theme.font,
+            }}
+          >
+            Logout
+          </button>
         </div>
       </div>
 

@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from routes.services import router as services_router
 from routes.stylists import router as stylists_router
 from routes.bookings import router as bookings_router
+from routes.auth import router as auth_router
 
 app = FastAPI(
     title="Salon Booking API",
@@ -22,6 +23,7 @@ app.add_middleware(
 app.include_router(services_router)
 app.include_router(stylists_router)
 app.include_router(bookings_router)
+app.include_router(auth_router, prefix="/auth", tags=["Auth"])
 
 
 @app.get("/", tags=["Health"])

@@ -1,21 +1,41 @@
-import React from "react";
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
+import { BrowserRouter, Routes, Route, useNavigate, useLocation } from "react-router-dom";
 import Booking from "./pages/booking.jsx";
 import Admin from "./pages/admin.jsx";
 import Settings from "./pages/settings.jsx";
-import { theme, applyTheme } from "./theme";
 import MyBookings from "./pages/MyBookings.jsx";
+import Login from "./pages/Login.jsx";
+import Register from "./pages/Register.jsx";
+import { theme, applyTheme } from "./theme";
 
-export default function App() {
-  const [page, setPage] = useState("booking");
+function Layout() {
+  const [token, setToken] = useState(() => localStorage.getItem("token") || null);
   const [themeMode, setThemeMode] = useState(
     () => localStorage.getItem("theme") || "dark"
   );
+  const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     applyTheme(themeMode);
     localStorage.setItem("theme", themeMode);
   }, [themeMode]);
+
+  function handleLogin(newToken) {
+    setToken(newToken);
+    navigate("/mybookings");
+  }
+
+  function handleLogout() {
+    localStorage.removeItem("token");
+    setToken(null);
+    navigate("/");
+  }
+
+  const isAdmin = location.pathname === "/admin";
+  if (isAdmin) {
+    return <Admin />;
+  }
 
   const navStyle = {
     display: "flex",
@@ -40,27 +60,52 @@ export default function App() {
     fontWeight: 600,
   });
 
+  const p = location.pathname;
+
   return (
     <div style={{ background: theme.bg, minHeight: "100vh" }}>
       <div style={navStyle}>
-        <button style={btn(page === "booking")} onClick={() => setPage("booking")}>
+        <button style={btn(p === "/")} onClick={() => navigate("/")}>
           Booking
         </button>
-        <button style={btn(page === "admin")} onClick={() => setPage("admin")}>
-          Admin
-        </button>
-        <button style={btn(page === "settings")} onClick={() => setPage("settings")}>
+        <button style={btn(p === "/settings")} onClick={() => navigate("/settings")}>
           Settings
         </button>
-        <button style={btn(page === "mybookings")} onClick={() => setPage("mybookings")}>
-          My Bookings
-        </button>
+
+        {token ? (
+          <>
+            <button style={btn(p === "/mybookings")} onClick={() => navigate("/mybookings")}>
+              My Bookings
+            </button>
+            <button
+              style={{ ...btn(false), marginLeft: "auto", color: theme.danger }}
+              onClick={handleLogout}
+            >
+              Logout
+            </button>
+          </>
+        ) : (
+          <button style={btn(p === "/login")} onClick={() => navigate("/login")}>
+            Login
+          </button>
+        )}
       </div>
 
-      {page === "booking" && <Booking />}
-      {page === "admin" && <Admin />}
-      {page === "settings" && <Settings onThemeChange={setThemeMode} />}
-      {page === "mybookings" && <MyBookings />}
+      <Routes>
+        <Route path="/" element={<Booking token={token} />} />
+        <Route path="/mybookings" element={<MyBookings token={token} />} />
+        <Route path="/login" element={<Login onLogin={handleLogin} onGoRegister={() => navigate("/register")} />} />
+        <Route path="/register" element={<Register onLogin={handleLogin} onGoLogin={() => navigate("/login")} />} />
+        <Route path="/settings" element={<Settings onThemeChange={setThemeMode} />} />
+      </Routes>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Layout />
+    </BrowserRouter>
   );
 }

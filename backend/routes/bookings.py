@@ -1,6 +1,7 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import Optional
 from datetime import datetime, timedelta
+from utils.deps import get_current_client, get_current_admin
 
 from database import get_connection
 
@@ -57,6 +58,7 @@ def list_bookings(
     stylist_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
     date: Optional[str] = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    current_admin: dict = Depends(get_current_admin),
 ):
     conn = get_connection()
     cursor = conn.cursor()
@@ -95,28 +97,13 @@ def list_bookings(
     conn.close()
     return [dict(b) for b in bookings]
 
+
 @router.get("/client")
-def get_client_bookings(
-    phone: Optional[str] = Query(None),
-    email: Optional[str] = Query(None),
-):
-    if not phone and not email:
-        raise HTTPException(status_code=400, detail="Provide phone or email")
+def get_client_bookings(current_client: dict = Depends(get_current_client)):
+    client_id = int(current_client["sub"])
 
     conn = get_connection()
     cursor = conn.cursor()
-
-    # Find client
-    if email:
-        cursor.execute("SELECT id FROM clients WHERE email = %s", (email,))
-    else:
-        cursor.execute("SELECT id FROM clients WHERE phone = %s", (phone,))
-
-    client = cursor.fetchone()
-    if not client:
-        raise HTTPException(status_code=404, detail="No client found with those details")
-
-    # Fetch their bookings, latest first
     cursor.execute("""
         SELECT 
             bookings.id,
@@ -131,7 +118,7 @@ def get_client_bookings(
         JOIN stylists ON bookings.stylist_id = stylists.id
         WHERE bookings.client_id = %s
         ORDER BY bookings.booking_date DESC, bookings.booking_time DESC
-    """, (client["id"],))
+    """, (client_id,))
 
     bookings = cursor.fetchall()
     conn.close()
@@ -168,18 +155,20 @@ def get_booking(booking_id: int):
 
 @router.post("/", status_code=201)
 def create_booking(
-    client_id: int,
     stylist_id: int,
     service_id: int,
     booking_date: str,
     booking_time: str,
-    price: float,
+    current_client: dict = Depends(get_current_client),
 ):
+    client_id = int(current_client["sub"])
     conn = get_connection()
     cursor = conn.cursor()
 
     _, service = _validate_booking_refs(cursor, stylist_id, service_id)
     _check_conflict(cursor, stylist_id, booking_date, booking_time, service["duration_minutes"])
+
+    price = service["price"]
 
     cursor.execute("""
         INSERT INTO bookings (client_id, stylist_id, service_id, booking_date, booking_time, status, price)
@@ -193,7 +182,7 @@ def create_booking(
 
 
 @router.patch("/{booking_id}/status")
-def update_booking_status(booking_id: int, status: str):
+def update_booking_status(booking_id: int, status: str, current_admin: dict = Depends(get_current_admin)):
     valid_statuses = ["pending", "confirmed", "completed", "cancelled"]
     if status not in valid_statuses:
         raise HTTPException(status_code=400, detail=f"Status must be one of {valid_statuses}")
@@ -214,14 +203,17 @@ def update_booking_status(booking_id: int, status: str):
 
 
 @router.patch("/{booking_id}/cancel")
-def cancel_booking(booking_id: int):
+def cancel_booking(booking_id: int, current_client: dict = Depends(get_current_client)):
+    client_id = int(current_client["sub"])
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT status FROM bookings WHERE id = %s", (booking_id,))
+    cursor.execute("SELECT status, client_id FROM bookings WHERE id = %s", (booking_id,))
     booking = cursor.fetchone()
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
+    if booking["client_id"] != client_id:
+        raise HTTPException(status_code=403, detail="Not your booking")
     if booking["status"] == "cancelled":
         raise HTTPException(status_code=400, detail="Booking is already cancelled")
 
@@ -236,7 +228,7 @@ def cancel_booking(booking_id: int):
 
 
 @router.delete("/{booking_id}", status_code=204)
-def delete_booking(booking_id: int):
+def delete_booking(booking_id: int, current_admin: dict = Depends(get_current_admin)):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM bookings WHERE id = %s RETURNING id", (booking_id,))
@@ -256,13 +248,12 @@ def quick_booking(
     service_id: int,
     booking_date: str,
     booking_time: str,
-    price: float,
     email: Optional[str] = None,
+    current_admin: dict = Depends(get_current_admin),
 ):
     conn = get_connection()
     cursor = conn.cursor()
 
-    # Find or create client
     client_id = None
 
     if email:
@@ -278,13 +269,11 @@ def quick_booking(
         )
         client_id = cursor.fetchone()["id"]
 
-    # Validate stylist and service
     _, service = _validate_booking_refs(cursor, stylist_id, service_id)
-
-    # Check conflicts
     _check_conflict(cursor, stylist_id, booking_date, booking_time, service["duration_minutes"])
 
-    # Create booking
+    price = service["price"]
+
     cursor.execute("""
         INSERT INTO bookings (client_id, stylist_id, service_id, booking_date, booking_time, status, price)
         VALUES (%s, %s, %s, %s, %s, 'pending', %s) RETURNING id
@@ -292,7 +281,6 @@ def quick_booking(
 
     booking_id = cursor.fetchone()["id"]
 
-    # Return full booking with joined names
     cursor.execute("""
         SELECT 
             bookings.id,
